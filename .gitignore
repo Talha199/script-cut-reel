@@ -1,0 +1,9 @@
+node_modules/
+# project working folders created by setup.mjs, if someone runs the scripts inside the repo
+assets/
+edit/
+out/
+snapshots/
+index.html
+*.mp4
+*.wav
