@@ -29,6 +29,11 @@ with local, offline transcription (Parakeet TDT v3, 25 European languages).
 - **Captions** that follow the voice word by word, ≤ 22 characters per line, two-line pyramid for long
   phrases, keyword emphasis, a reusable spelling glossary, reading-speed checks. Latin + Latin-Extended
   fonts (German, Turkish, …).
+- **Automatic punch-ins** — 100 % ↔ 112 % on jump cuts (hiding the jump) and on keywords, calmly
+  spaced, anchored at the eyes; never during recitation or quotes; one optional slow push on the
+  thesis line.
+- **Quote cards for direct quotes only** — the exact spoken words in quotation marks with a named
+  source (a verse, a hadith, a cited author), brightening as they're spoken; paraphrases never get one.
 - **Layout inside Instagram's safe zones** (top 14 %, bottom 35 %, sides 6 %, button rail) and the
   3:4 profile-grid crop; `build.mjs --guides` overlays them for checking.
 - **Correct picture**: iPhone HLG HDR tone-mapped to BT.709, aspect mismatches cover-cropped (never
@@ -38,7 +43,7 @@ with local, offline transcription (Parakeet TDT v3, 25 European languages).
 - **Publish package**: cover + 3:4 grid preview, caption skeleton (keyword-first line, one send/save
   CTA, ≤ 5 hashtags), alt text, upload checklist (auto-captions off, Collab, Trial Reels), and what to
   read in Insights afterwards.
-- Restrained graphics: hook headline, serif title card, optional source chips. No intro, progress bar
+- Restrained graphics: hook headline, serif title card, quote cards, optional source chips. No intro, progress bar
   or fade to black by default — each is opt-in.
 
 Why these defaults: [`references/research-2026-10.md`](references/research-2026-10.md) (sources and

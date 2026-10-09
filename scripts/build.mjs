@@ -148,14 +148,6 @@ const titleStatic = title && title.t < 1 / FPS;
 const showProgress = project.progress === true;
 const endFade = project.endFade ?? 0;
 
-// Hook, title and ref chips share the top band — they must take turns.
-const topItems = [hook && ["hook", hook.t, hook.end], title && ["title", title.t, title.t + title.dur + 0.4],
-  ...refs.map((r) => [r.id, r.t, r.t + (r.dur ?? 4) + 0.35])].filter(Boolean);
-for (let i = 0; i < topItems.length; i++) for (let j = i + 1; j < topItems.length; j++) {
-  const [a, a0, a1] = topItems[i], [b, b0, b1] = topItems[j];
-  if (a0 < b1 && b0 < a1) warn(`${a} (${a0.toFixed(1)}–${a1.toFixed(1)} s) and ${b} (${b0.toFixed(1)}–${b1.toFixed(1)} s) overlap in the top band — use title.after: "hook" or move one`);
-}
-
 // ── 3. Caption words: keep words inside kept segments, remap to timeline ──
 const fixes = project.captionFixes ?? {}; // { "<word index>": "corrected text" | "" (drop) }
 const emphasis = new Set((project.captionEmphasis ?? []).map(String)); // word indices drawn bold + accent
@@ -175,8 +167,45 @@ srcWords.forEach((w) => {
   if (!clip) return;
   const start = mapIn(clip, w.start);
   const end = Math.max(mapIn(clip, w.end), start + 0.08);
-  capWords.push({ text: w.text.trim(), start, end, seg: clip.seg, em: w.em });
+  capWords.push({ text: w.text.trim(), start, end, src: w.start, seg: clip.seg, em: w.em });
 });
+
+// ── 3b. Quote cards — only for direct quotes: the card shows exactly the words spoken between
+// src and srcEnd (fix spelling with captionFixes, never by retyping), and a named source is
+// required. Those words leave the captions; on the card they brighten as they are spoken.
+const QUOTE_MARKS = { de: ["„", "“"], tr: ["“", "”"], en: ["“", "”"], fr: ["« ", " »"] }[lang.slice(0, 2).toLowerCase()] ?? ["“", "”"];
+const cards = (project.quotes ?? []).map((spec, i) => {
+  if (!spec.source) throw new Error(`quotes[${i}]: "source" is required (e.g. "Sure 2:186") — cards are only for direct quotes with a named source`);
+  const ws = capWords.filter((w) => w.card === undefined && w.src >= spec.src - 0.05 && w.src <= spec.srcEnd + 0.05);
+  if (!ws.length) throw new Error(`quotes[${i}]: no spoken words between ${spec.src} and ${spec.srcEnd} s`);
+  ws.forEach((w) => (w.card = i));
+  const shown = ws.map((w, j) => {
+    let t = w.text;
+    if (j === 0) t = t.replace(/^[„“”"«»‚‘’']+\s*/, "");
+    if (j === ws.length - 1) t = t.replace(/[„“”"«»‚‘’']+(?=[.,;:!?…]*$)/, "").replace(/\s*[“”"«»‘’']+$/, "");
+    return t;
+  });
+  const chars = shown.join(" ").length;
+  if (chars > 220) warn(`quotes[${i}] has ${chars} characters — split it into two cards at a sentence end`);
+  return { id: `card-${i}`, words: ws, shown, chars, source: spec.source, style: spec.style === "lower" ? "lower" : "full",
+    t: q(Math.max(0, ws[0].start - 0.2)), end: q(ws.at(-1).end + 0.6) };
+});
+// A card holds 0.6 s after the quote, but leaves before the next spoken word and the next card.
+cards.forEach((c, i) => {
+  const last = c.words.at(-1).end;
+  const nextWord = capWords.find((w) => w.card === undefined && w.start > last);
+  c.end = q(Math.max(last + 0.15, Math.min(c.end, nextWord ? nextWord.start - 0.05 : total, cards[i + 1]?.t ?? total, total)));
+});
+const cardTime = cards.reduce((s, c) => s + c.end - c.t, 0);
+if (cardTime > 0.35 * total) warn(`quote cards cover ${Math.round(cardTime / total * 100)} % of the Reel — keep them for the quotes that matter (≤ ~35 %)`);
+
+// Hook, title, ref chips and full-frame cards share the top band — they must take turns.
+const topItems = [hook && ["hook", hook.t, hook.end], title && ["title", title.t, title.t + title.dur + 0.4],
+  ...refs.map((r) => [r.id, r.t, r.t + (r.dur ?? 4) + 0.35]), ...cards.filter((c) => c.style === "full").map((c) => [c.id, c.t, c.end])].filter(Boolean);
+for (let i = 0; i < topItems.length; i++) for (let j = i + 1; j < topItems.length; j++) {
+  const [a, a0, a1] = topItems[i], [b, b0, b1] = topItems[j];
+  if (a0 < b1 && b0 < a1) warn(`${a} (${a0.toFixed(1)}–${a1.toFixed(1)} s) and ${b} (${b0.toFixed(1)}–${b1.toFixed(1)} s) overlap in the top band — use title.after: "hook" or move one`);
+}
 
 // Group into short readable phrases: break on punctuation, pauses, segment cuts, and length.
 const cap = {
@@ -197,8 +226,9 @@ const sentenceEnd = (w) => /[.?!]["“”»]?$/.test(w.text);
 const groups = [];
 let g = [];
 const close = () => g.length && (groups.push(g), (g = []));
-if (cap.enabled) capWords.forEach((w, i) => {
-  const prev = capWords[i - 1];
+const captionWords = capWords.filter((w) => w.card === undefined);
+if (cap.enabled) captionWords.forEach((w, i) => {
+  const prev = captionWords[i - 1];
   if (g.length && prev) {
     const chars = textOf(g).length + 1 + w.text.length;
     const gap = w.start - prev.end;
@@ -214,7 +244,8 @@ const joinable = (a, b) => a.at(-1).seg === b[0].seg && b[0].start - a.at(-1).en
   textOf([...a, ...b]).length <= 2 * cap.maxChars;
 for (let i = 0; i < groups.length; i++) {
   const a = groups[i], next = groups[i + 1], prev = groups[i - 1];
-  if ((next ? next[0].start : a.at(-1).end + 0.3) - a[0].start >= cap.minDur) continue;
+  const cardNext = cards.find((c) => c.t > a[0].start)?.t ?? Infinity; // a quote card also ends the phrase
+  if (Math.min(next ? next[0].start : a.at(-1).end + 0.3, cardNext) - a[0].start >= cap.minDur) continue;
   if (next && joinable(a, next)) { groups.splice(i, 2, [...a, ...next]); i--; }
   else if (prev && joinable(prev, a)) { groups.splice(i - 1, 2, [...prev, ...a]); i -= 2; }
 }
@@ -246,7 +277,46 @@ if (cap.startAfter === "hook" && hook) {
   capGroups = capGroups.filter((c) => c.out - Math.max(c.in, hook.end) >= cap.minDur / 2); // no slivers
   capGroups.forEach((c) => (c.in = Math.max(c.in, hook.end)));
 }
+for (const cg of capGroups) for (const c of cards) if (c.t > cg.in && c.t < cg.out) cg.out = q(Math.max(cg.in + 0.2, c.t)); // card takes over
 const cps = capGroups.map((c) => textOf(c.words).length / Math.max(0.1, c.out - c.in));
+
+// ── 3c. Framing: automatic punch-ins ──
+// Calm profile: the main video sits at 100 % or at `punch` (112 %) and switches only on a jump cut —
+// where the change of scale also hides the jump — or on the first word of an emphasised keyword, and
+// never sooner than `minHold` seconds after the previous change. Protected ranges, quote cards and the
+// intro go back to 100 % and hold it. One optional slow push (100 → 107 %) carries the thesis line.
+// The scale is anchored at `origin` (the eyes), so the face stays where it is and the edges crop.
+const zoomOn = project.zoom !== false;
+const zoom = { punch: 1.12, minHold: 4, origin: "50% 38%", push: null, ...(typeof project.zoom === "object" ? project.zoom : {}) };
+zoom.punch = Math.min(1.2, Math.max(1, zoom.punch));
+const rawSpans = (r) => mainClips.filter((c) => c.srcIn < r.out && c.srcOut > r.in)
+  .map((c) => [mapIn(c, Math.max(c.srcIn, r.in)), mapIn(c, Math.min(c.srcOut, r.out))]);
+const holds = [...protect.flatMap(rawSpans), ...cards.map((c) => [c.t, c.end]), ...(intro ? [[intro.start, intro.start + intro.dur]] : [])];
+let push = null;
+if (zoom.push) {
+  const sp = rawSpans({ in: zoom.push.src, out: zoom.push.srcEnd });
+  if (sp.length) push = { a: q(sp[0][0]), b: q(sp.at(-1)[1]), to: Math.min(1.1, zoom.push.scale ?? 1.07) };
+  else warn("zoom.push is outside the kept segments — ignored");
+}
+const inSpan = (t, [a, b]) => t >= a - 1e-3 && t < b - 1e-3;
+const framing = []; // {t, s, from?, dur?, why}
+if (zoomOn) {
+  const events = [
+    ...mainClips.filter((c) => clips[clips.indexOf(c) - 1]?.kind === "main").map((c) => ({ t: c.start, why: "cut" })),
+    ...capWords.filter((w) => w.em && w.card === undefined).map((w) => ({ t: q(w.start), why: "keyword" })),
+    ...holds.map(([a, b]) => ({ t: q(a), end: b, why: "hold" })),
+    ...(push ? [{ t: push.a, why: "push" }] : []),
+  ].sort((x, y) => x.t - y.t || (x.why === "hold" ? -1 : 1));
+  let s = 1, last = 0;
+  const set = (t, v, why) => { if (Math.abs(v - s) > 1e-3) framing.push({ t: q(t), s: v, why }); s = v; last = t; };
+  for (const e of events) {
+    if (e.why === "hold") { set(e.t, 1, "hold"); last = Math.max(last, e.end); continue; }
+    if (e.why === "push") { framing.push({ t: push.a, from: 1, s: push.to, dur: push.b - push.a, why: "push" }); s = push.to; last = push.b; continue; }
+    if (holds.some((h) => inSpan(e.t, h)) || (push && e.t >= push.a && e.t < push.b)) continue;
+    if (e.why === "cut" && e.t - last >= zoom.minHold) set(e.t, s === 1 ? zoom.punch : 1, "cut");
+    else if (e.why === "keyword" && s === 1 && e.t - last >= Math.min(3, zoom.minHold)) set(e.t, zoom.punch, "keyword");
+  }
+}
 
 // ── 4. Music bed: level under speech, its own level during the intro, fade in/out ──
 // Linear gains on −16 LUFS tracks: bed 0.10 ≈ −20 dB under the voice (accessibility guidance: ≥ 20 dB).
@@ -274,6 +344,8 @@ const maxCps = Math.max(0, ...cps);
 const mmss = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 console.log(`QA  ${mmss(total)} · first word ${firstWord?.toFixed(2)} s · ${(capWords.length / speech * 60).toFixed(0)} wpm · ` +
   `captions ≤ ${maxCps.toFixed(1)} chars/s (${cps.filter((c) => c > 17).length} over 17) · longest pause ${pause.len.toFixed(2)} s @ ${pause.at.toFixed(1)} s`);
+if (zoomOn || cards.length) console.log(`    framing: ${framing.filter((x) => x.s !== 1).length} punch-ins (${framing.filter((x) => x.why === "cut").length} on cuts, ` +
+  `${framing.filter((x) => x.why === "keyword").length} on keywords)${push ? ", 1 push" : ""} · quote cards: ${cards.length}${cards.length ? ` (${Math.round(cardTime / total * 100)} % of runtime)` : ""}`);
 if (portrait && total > 180) warn(`${mmss(total)} is over 3:00 — Instagram doesn't recommend Reels longer than 3 minutes`);
 else if (portrait && total > 90) warn(`${mmss(total)} — 30–90 s Reels reach best; drop a passage or tighten pauses if the content allows`);
 if (firstWord !== null && firstWord > 0.3) warn(`first word at ${firstWord.toFixed(2)} s — open on speech`);
@@ -294,7 +366,7 @@ const S = portrait
 
 // Adjacent clips alternate tracks 0/1: same-track neighbours trip lint's duplicate_audio_track on rounding.
 const videoTags = clips.map((c, ci) => c.kind === "main"
-  ? `    <video id="${c.id}" class="clip vid" src="${media.main.file}" data-start="${f(c.start)}" data-duration="${f(c.dur)}" data-media-start="${c.mediaStart.toFixed(3)}" data-fade-in="0.03" data-fade-out="0.03" data-track-index="${ci % 2}" playsinline data-has-audio="true"></video>`
+  ? `    <video id="${c.id}" class="clip vid cam" src="${media.main.file}" data-start="${f(c.start)}" data-duration="${f(c.dur)}" data-media-start="${c.mediaStart.toFixed(3)}" data-fade-in="0.03" data-fade-out="0.03" data-track-index="${ci % 2}" playsinline data-has-audio="true"></video>`
   : `    <video id="intro" class="clip vid" src="${media.intro.file}" data-start="${f(c.start)}" data-duration="${f(c.dur)}" data-track-index="${ci % 2}" playsinline ${media.intro.hasAudio && !project.introMuted ? 'data-has-audio="true"' : "muted"}></video>`).join("\n");
 
 let wi = 0;
@@ -303,6 +375,13 @@ const capHtml = capGroups.map((cg) => {
   const size = cg.scale < 1 ? ` style="font-size:${Math.round(cap.size * cg.scale)}px"` : "";
   const lines = cg.lines.map((l) => l.map((w) => `<span class="w${w.em ? " em" : ""}" id="${cg.id}-w${wi++}">${esc(w.text)}</span>`).join(" "));
   return `      <div class="cap" id="${cg.id}"><span class="cap-inner"${size}>${lines.join("<br>")}</span></div>`;
+}).join("\n");
+// Quote cards: the quote marks sit inside the first/last word so a line never starts with a lone mark.
+const cardSize = (c) => Math.round((c.style === "full" ? (c.chars <= 60 ? 78 : c.chars <= 110 ? 66 : c.chars <= 160 ? 58 : 50)
+  : (c.chars <= 60 ? 56 : c.chars <= 110 ? 50 : c.chars <= 160 ? 46 : 42)) * (portrait ? 1 : 0.85));
+const cardHtml = cards.map((c) => {
+  const ws = c.shown.map((t, j) => `<span class="cw" id="${c.id}-w${j}">${j === 0 ? `<span class="qm">${QUOTE_MARKS[0]}</span>` : ""}${esc(t)}${j === c.shown.length - 1 ? `<span class="qm">${QUOTE_MARKS[1]}</span>` : ""}</span>`);
+  return `      <div class="card ${c.style}" id="${c.id}"><div class="box"><p class="qt" style="font-size:${cardSize(c)}px">${ws.join(" ")}</p><div class="src">${esc(c.source)}</div></div></div>`;
 }).join("\n");
 const hookHtml = hook && `      <div id="hook"><span class="hook-inner">${esc(hook.text).replace(/\*([^*]+)\*/g, "<em>$1</em>")}</span></div>`;
 
@@ -382,6 +461,23 @@ ${faces.join("\n")}
   .w { display: inline-block; }
   .w.em { font-weight: 800; color: var(--accent); }
 
+  /* main video: punch-ins scale around the eyes (GSAP sets the scale; no CSS transform here) */
+  .cam { transform-origin: ${zoom.origin}; }
+
+  /* quote cards — direct quotes only. full: the frame dims and the quote fills the safe area;
+     lower: a panel where the captions sit, the face stays visible. Words brighten as spoken. */
+  .card { position: absolute; inset: 0; opacity: 0; }
+  .card.full { background: rgba(${theme.ink},.82); }
+  .card .box { position: absolute; left: ${S.pad + 18}px; right: ${S.pad + 18}px; }
+  .card.full .box { top: ${portrait ? Math.round(H * 0.14) + 20 : 80}px; bottom: ${portrait ? Math.round(H * 0.35) : 110}px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .card.lower .box { bottom: ${cap.bottom}px; padding: 34px 40px 30px; background: rgba(${theme.ink},.82); border-radius: 22px; border-left: 4px solid var(--accent); }
+  .card .qt { color: var(--text); font-family: "Cormorant Garamond", serif; font-weight: 700; line-height: 1.22; text-wrap: balance; text-shadow: 0 2px 16px rgba(0,0,0,.4); }
+  .card .cw { display: inline-block; opacity: .45; }
+  .card .qm { color: var(--accent); }
+  .card .src { margin-top: 30px; color: var(--accent); font: 700 ${portrait ? 26 : 20}px/1.2 "Inter", sans-serif; letter-spacing: .16em; text-transform: uppercase; }
+  .card .src::before { content: ""; display: block; width: 120px; height: 3px; margin: 0 auto 22px; background: var(--accent); }
+  .card.lower .src::before { margin-left: 0; }
+
   #fade { position: absolute; inset: 0; background: #000; opacity: 0; }
 ${guidesHtml ? `
   /* --guides (snapshot only) */
@@ -402,6 +498,7 @@ ${hookHtml ?? ""}
 ${title ? `      <div id="title"><div class="bg"></div>${title.kicker ? `<div class="kicker">${esc(title.kicker)}</div>` : ""}<div class="rule"></div><h1>${esc(title.title)}</h1>${title.subtitle ? `<h2>${esc(title.subtitle)}</h2>` : ""}</div>` : ""}
 ${refs.map((r) => `      <div class="ref" id="${r.id}">${star}<span><span class="k">${esc(r.kicker ?? "")}</span><span class="v">${esc(r.text)}</span></span></div>`).join("\n")}
 ${capHtml}
+${cardHtml}
       <div id="fade"></div>
     </div>
 ${guidesHtml}
@@ -434,16 +531,29 @@ ${refs.map((r) => `        tl.fromTo("#${r.id}", { opacity: 0, x: -24 }, { opaci
 
         // captions: phrase fades up, the spoken word takes the highlight colour
 ${capGroups.map((cg) => {
-  const lines = [`        tl.fromTo("#${cg.id}", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.18, ease: "power2.out" }, ${f(cg.in)});`];
+  const fadeIn = Math.min(0.18, (cg.out - cg.in) / 2 - 1 / FPS); // very short phrases: fades must not overlap
+  const lines = [`        tl.fromTo("#${cg.id}", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: ${fadeIn.toFixed(3)}, ease: "power2.out" }, ${f(cg.in)});`];
   cg.words.forEach((w, j) => {
     if (w.em) return;
     const next = cg.words[j + 1];
     const off = next ? next.start : Math.min(w.end + 0.25, cg.out);
     lines.push(`        tl.to("#${cg.id}-w${j}", { color: HL, duration: 0.08 }, ${f(Math.max(w.start, cg.in))}).to("#${cg.id}-w${j}", { color: TEXT, duration: 0.12 }, ${f(Math.max(off, w.start + 0.1, cg.in + 0.1))});`);
   });
-  lines.push(`        tl.to("#${cg.id}", { opacity: 0, duration: 0.14, ease: "power1.in" }, ${f(cg.out - 0.14)});`);
+  const fadeOut = Math.min(0.14, (cg.out - cg.in) / 2 - 1 / FPS);
+  lines.push(`        tl.to("#${cg.id}", { opacity: 0, duration: ${fadeOut.toFixed(3)}, ease: "power1.in" }, ${f(cg.out - fadeOut)});`);
   return lines.join("\n");
 }).join("\n")}
+
+${framing.length ? `        // framing: punch-ins on cuts / keywords, holds at 100 %${push ? ", one slow push" : ""}
+${framing.map((x) => x.dur
+  ? `        tl.fromTo(".cam", { scale: ${x.from} }, { scale: ${x.s}, duration: ${f(x.dur - 1 / FPS)}, ease: "none", immediateRender: false }, ${f(x.t)});`
+  : `        tl.set(".cam", { scale: ${x.s} }, ${f(x.t)});`).join("\n")}` : ""}
+
+${cards.map((c) => `        // ${c.id}: ${c.source}
+        tl.fromTo("#${c.id}", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, ${f(c.t)});
+        tl.fromTo("#${c.id} .box", { y: 16 }, { y: 0, duration: 0.45, ease: "power2.out" }, ${f(c.t)});
+${c.words.map((w, j) => `        tl.to("#${c.id}-w${j}", { opacity: 1, duration: 0.12 }, ${f(Math.max(w.start, c.t + 0.05))});`).join("\n")}
+        tl.to("#${c.id}", { opacity: 0, duration: 0.3, ease: "power1.in" }, ${f(Math.max(c.t + 0.45, c.end - 0.3))});`).join("\n")}
 
 ${endFade > 0 ? `        // end: fade to black
         tl.to("#fade", { opacity: 1, duration: ${endFade}, ease: "power1.in" }, ${f(total - endFade)});` : ""}
@@ -463,6 +573,8 @@ fs.writeFileSync(p("edit/timeline.json"), JSON.stringify({
   hook: hook && { text: hook.text.replace(/\*/g, ""), t: hook.t, end: hook.end },
   title: title && { kicker: title.kicker, title: title.title, subtitle: title.subtitle, t: title.t, dur: title.dur },
   clips,
+  framing,
+  quotes: cards.map((c) => ({ t: c.t, end: c.end, source: c.source, style: c.style, text: c.shown.join(" ") })),
   captions: capGroups.map((c, i) => ({ in: c.in, out: c.out, cps: +cps[i].toFixed(1), text: textOf(c.words) })),
 }, null, 2));
-console.log(`index.html written · ${W}x${H} · ${total.toFixed(2)}s · ${clips.length} clips · ${capGroups.length} caption groups · ${refs.length} refs${hook ? " · hook" : ""}`);
+console.log(`index.html written · ${W}x${H} · ${total.toFixed(2)}s · ${clips.length} clips · ${capGroups.length} caption groups · ${refs.length} refs · ${cards.length} quote cards${hook ? " · hook" : ""}`);

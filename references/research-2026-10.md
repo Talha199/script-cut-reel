@@ -5,9 +5,10 @@
      with these differences: caption line-height is 1.36 (tighter values make two-line scrims overlap);
      QA checks live in build.mjs; the "> 12 s without a visual change" check is not implemented; the
      cover is taken from the finished video's first frame rather than a separate build.
-     Of the "Larger features", partly done: protected spans (#2, pauses only), landscape → 9:16
-     reframe (#5, manual --focus-x instead of face detection), hook variants (#4, by building twice).
-     Not yet: punch-ins (#1), intro overlay modes (#3), graphic cards (#6), loop-ending helper (#7).
+     Of the "Larger features": punch-ins (#1) done — calm profile on jump cuts and keywords, manual
+     eye-level origin instead of face detection; graphic cards (#6) done for direct quotes only;
+     partly done: protected spans (#2, pauses only), landscape → 9:16 reframe (#5, manual --focus-x),
+     hook variants (#4, by building twice). Not yet: intro overlay modes (#3), loop-ending helper (#7).
      One correction from testing: the tone-map recipe recommended in "Medium changes #1" (npl=100 +
      hable) leaves HLG grey; the implemented chain uses npl=203 + mobius — see gotchas.md. -->
 

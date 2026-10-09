@@ -129,12 +129,34 @@ Copy `<SKILL>/templates/project.example.json`; full field reference in
 - `captionFixes` keyed by transcript word index: script spelling, punctuation, quotation marks
   („…“ for German), `""` to drop filler/ASR artifacts; `captionInserts` for audit item 1
 - `captionEmphasis`: word indices of the few keywords that carry the message (≤ 1 per phrase).
+  They also trigger punch-ins.
+- `zoom`: punch-ins are automatic (on jump cuts and keywords, calm spacing). Set `zoom.origin` to
+  the speaker's eye position (check the frame at 0) and, optionally, `zoom.push` on the one thesis
+  sentence. `"zoom": false` for a static frame.
+- `quotes`: quote cards — **only for direct quotes**, see the rules below.
 - `edit/glossary.json`: copy `templates/glossary.de.json` / `glossary.tr.json` and extend it with the
   speaker's names and recurring terms — fixes them in every caption without per-index fixes.
 - `music.bed` (0.10 default), optional `theme`. No `introAfter` unless the user asked for the intro.
 
 Edit JSON with node/Python or the Edit tool, **never PowerShell `Get-Content`/`Set-Content`**
 (mangles UTF-8 and adds a BOM — see gotchas).
+
+**Quote cards — when, and only when.** A card says "these are someone else's exact words", so it
+must be true. Add one only if **all** of these hold:
+1. The script marks it as a direct quote: quotation marks, or an explicit attribution followed by the
+   words themselves ("Allah sagt im Koran: …", "Der Prophet ﷺ sagte: …", "Mevlânâ diyor ki: …").
+2. The speaker says the quoted words verbatim. The card shows exactly the transcript words between
+   `src` and `srcEnd`: put `src` on the first quoted word, after "sagte:", and fix spelling with
+   `captionFixes`. If the speaker deviates from the script's wording, it's not a card.
+3. The source is known from the script or confirmed by the user — never guess a surah/verse
+   number, hadith collection or author.
+
+Not a card: paraphrases ("sinngemäß", "es heißt, dass …"), summaries, the speaker's own statements, a
+quote the speaker shortens on the fly, and Arabic recitation itself (no Arabic font, and the ASR
+doesn't transcribe it). If the translation that follows the recitation is read verbatim, the card
+goes on the translation. Keep a card under ~220 characters (split long passages at a sentence end
+into consecutive cards) and the cards together under ~35 % of the Reel. `full` (default) suits a
+verse or hadith as a moment of its own; `lower` keeps the face visible for shorter quotes.
 
 ### 6. Build, check, look
 
@@ -157,6 +179,8 @@ on and check:
   button rail (bottom right);
 - hook/title and the face inside the blue **3:4 grid** lines (that crop is the profile grid);
 - captions readable and clear of the mouth (if the speaker is framed low, `captions.bottom` 600);
+- after a punch-in the eyes stay put and nothing important is cropped (else adjust `zoom.origin`,
+  or lower `zoom.punch`); quote cards show the exact words, marks and source;
 - correct characters („ “ · ş ğ İ), keywords emphasised sparingly.
 One `lint` warning (`composition_file_too_large`) is expected.
 
@@ -209,6 +233,9 @@ Propose a default, explain the trade-off in one line, and ask:
 | "Sounds noisy / boomy" | `prep.mjs --main <raw> --clean`, then re-run `silences.mjs` (the WAV changes too). |
 | "Remove the pauses" / "keep pauses" | on by default when `edit/silences.json` exists; `"silence": false` disables, `keepAfter`/`keepBefore` tune the breath, `protect` keeps them in a range. |
 | "Add our intro" | Say once what it likely costs (viewers leave in the first seconds); then `prep --intro`, `"introAfter": 0`, warn if > 2 s. `introMuted` + `music.intro` 0.8–0.9 if its sound is unwanted. |
+| "No zooms" / "more zooms" | `"zoom": false` / `zoom.minHold` 3 (never below 3 s); `zoom.punch` 1.15 for a stronger punch (≤ 1.2 — the picture softens beyond). |
+| "Zoom in on this line" | `captionEmphasis` on its key word (punch-in at that word) or `zoom.push` across the sentence (one per Reel). |
+| "Show the verse/quote on screen" | Only if it passes the quote-card rules; otherwise say why (paraphrase, unknown source) and offer the caption emphasis instead. |
 | "Music louder/quieter" | `music.bed` (0.06–0.15; 0.10 ≈ −20 dB under the voice), `music.intro`. |
 | "Captions higher/lower" | `captions.bottom` (680 default; ≥ 600 keeps clear of Instagram's caption text). |
 | "Make a TikTok/Shorts version" | Upload the same final file: the caption band and title clear TikTok's and Shorts' interfaces too (third-party measurements). |
@@ -229,6 +256,10 @@ profile-grid crop (y 240–1680):
   below). The spoken word changes colour only — scaling it eats the neighbouring space. Keywords
   (`captionEmphasis`) are bold + accent; the running highlight then becomes a softer tint.
 - **Title**: Cormorant Garamond 700 with a kicker and a growing rule, top-left at y=310, after the hook.
+- **Punch-ins**: hard cuts between 100 % and 112 %, on jump cuts (hiding the jump) and keywords, at
+  least 4 s apart, anchored at the eyes; none during recitation or quote cards; one optional slow push.
+- **Quote cards**: Cormorant Garamond with the language's quotation marks in accent, the source in
+  small caps under a short rule; full-frame dim or a lower panel; words brighten as spoken.
 - **Motion**: decelerating entrances (`power2.out`, 180–600 ms), no bounce or overshoot.
 - **No** progress line, **no** fade to black, **no** default intro. Accent `#e6bf63` (gold) on a dark
   green-black scrim; `theme` changes it.

@@ -18,6 +18,10 @@
   "protect": [
     { "in": 71.8, "out": 79.4, "note": "Qur'an verse — no pause is cut inside" }
   ],
+  "quotes": [
+    { "src": 80.1, "srcEnd": 86.9, "source": "Sure 2:186", "note": "translation read verbatim, quoted in the script („Wenn … ruft.“)" }
+  ],
+  "zoom": { "origin": "50% 36%" },
   "music": { "bed": 0.10 },
   "refs": [],
   "captionInserts": [
