@@ -1,7 +1,7 @@
 // End-to-end self-test on synthetic media, in a temp folder whose path has a space and an umlaut:
 // setup → prep (HDR tone-map, crop, voice cleanup, music, intro) → silences → audit → build (hook,
 // title, quote card, punch-ins, protected span, glossary, emphasis, sound effects) → lint; with
-// --render also render → finalize → package. No transcription model needed: the transcript is
+// --render also render.mjs (render → finalize → package). No transcription model needed: the transcript is
 // synthetic. Needs internet on the first run (fonts, GSAP, HyperFrames).
 //   node <skill>/scripts/selftest.mjs [--render] [--keep]
 import { spawnSync } from "node:child_process";
@@ -104,19 +104,13 @@ step("hyperframes lint", () => {
 });
 
 if (args.render) {
-  step("hyperframes render", () => {
-    const r = hyperframes(["render", dir, "-o", P("out/selftest.mp4"), "--fps", "30", "--quality", "high", "--workers", "2"], { stdio: ["ignore", "pipe", "pipe"] });
-    expect(fs.existsSync(P("out/selftest.mp4")), (r.stdout + r.stderr).replace(/\x1b\[[0-9;]*m/g, "").slice(-1500));
-  });
-  step("finalize.mjs", () => {
-    run("finalize.mjs", P("out/selftest.mp4"));
+  step("render.mjs (render → finalize → package)", () => {
+    const out = run("render.mjs", "--name", "selftest");
     const qa = json("out/selftest.final.qa.json");
     expect(qa.issues.length === 0, qa.issues.join("; "));
-    return `${qa.loudness} LUFS · ${qa.mbps} Mbit/s · ${qa.color}`;
-  });
-  step("package.mjs", () => {
-    run("package.mjs", P("out/selftest.final.mp4"));
     expect(fs.existsSync(P("out/selftest.publish.md")) && fs.existsSync(P("out/selftest.cover.jpg")), "publish package incomplete");
+    const speed = out.match(/rendered in \d+ s \([^)]*\)/)?.[0] ?? "rendered";
+    return `${speed} · ${/GPU encode/.test(out) ? "GPU" : "CPU"} encode · ${qa.loudness} LUFS · ${qa.color}`;
   });
 }
 

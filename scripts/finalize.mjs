@@ -23,6 +23,14 @@ const VIDEO = mbps > Number(args["max-mbps"] ?? 25)
      "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
   : ["-c:v", "copy"];
 if (VIDEO[1] !== "copy") console.log(`render is ${mbps.toFixed(0)} Mbit/s → re-encoding video (CRF 18, ≤ 16 Mbit/s)`);
+// HyperFrames' GPU (NVENC) path tags only the matrix and leaves primaries/transfer "unknown"; players
+// then guess. The pixels are BT.709 either way, so write the full tag set into the H.264 headers —
+// a bitstream edit, no re-encode.
+const tagsOk = ["primaries", "transfer", "space"].every((k) => src.color?.[k] === "bt709");
+if (VIDEO[1] === "copy" && !tagsOk && src.raw.v?.codec_name === "h264") {
+  VIDEO.push("-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1");
+  console.log(`colour tags ${src.color.space ?? "?"}/${src.color.primaries ?? "?"}/${src.color.transfer ?? "?"} → bt709/bt709/bt709`);
+}
 
 const measure = (file, af) => {
   const r = spawnSync("ffmpeg", ["-hide_banner", "-i", file, "-map", "0:a:0", "-af", af, "-f", "null", "-"], { encoding: "utf8" });
@@ -61,7 +69,7 @@ const issues = [];
 if (timeline?.guides) issues.push("rendered WITH --guides overlays — rebuild without --guides and render again");
 if (info.height > info.width && (info.width !== 1080 || info.height !== 1920)) issues.push(`portrait but ${info.width}x${info.height} (expected 1080x1920)`);
 if (info.duration > 180) issues.push("longer than 3:00 — not recommended by Instagram");
-if (!/bt709/.test(qa.color)) issues.push(`colour not tagged BT.709 (${qa.color})`);
+if (![v.color_space, v.color_primaries, v.color_transfer].every((x) => x === "bt709")) issues.push(`colour not fully tagged BT.709 (${qa.color})`);
 if (v.codec_name !== "h264") issues.push(`video codec ${v.codec_name} — H.264 is the safe upload codec`);
 if (Math.abs(qa.loudness - I) > 1) issues.push(`loudness ${qa.loudness} LUFS, target ${I}`);
 if (qa.truePeak > TP + 0.5) issues.push(`true peak ${qa.truePeak} dBTP over ${TP}`);

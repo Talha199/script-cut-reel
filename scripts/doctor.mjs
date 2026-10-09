@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { args, HF, hasFilter, hyperframes } from "./lib.mjs";
+import { args, gpuEncoder, HF, hasFilter, hyperframes } from "./lib.mjs";
 
 let failed = false;
 const ok = (m) => console.log(`✓ ${m}`);
@@ -35,6 +35,8 @@ if (haveFfmpeg) {
   hasFilter("zscale") && hasFilter("tonemap") ? ok("zscale + tonemap (iPhone HDR → SDR)")
     : warn("no zscale/tonemap — HDR phone video can't be tone-mapped and will look grey. A full build has them: " + FFMPEG_FIX);
   const enc = spawnSync("ffmpeg", ["-hide_banner", "-encoders"], { encoding: "utf8" }).stdout ?? "";
+  const gpu = gpuEncoder();
+  gpu ? ok(`GPU video encoder ${gpu} (render.mjs uses it: encoding ~2.5× faster)`) : warn("no hardware H.264 encoder found — renders encode on the CPU (slower, same result)");
   for (const e of ["libx264", "aac"]) new RegExp(`\\s${e}\\s`).test(enc) ? ok(`encoder ${e}`) : fail(`ffmpeg has no ${e} encoder`, FFMPEG_FIX);
 }
 
@@ -47,6 +49,13 @@ else {
   const c = (name) => checks.find((x) => x.name === name);
   ok(`HyperFrames ${c("Version")?.detail ?? "?"}`);
   c("Chrome")?.ok ? ok("HyperFrames browser (headless Chrome)") : fail("HyperFrames browser missing", `npx -y ${HF} browser ensure   (may hang after finishing — see gotchas)`);
+  // Whisper (Turkish, Arabic, any non-European language): whisper.cpp is compiled on first use.
+  if (c("whisper-cpp")?.ok) ok("whisper.cpp (Turkish and other non-Parakeet languages)");
+  else {
+    const has = (bin) => spawnSync(bin, ["--version"], { encoding: "utf8", shell: process.platform === "win32" }).status === 0;
+    const tools = ["git", "cmake"].map((b) => `${b} ${has(b) ? "✓" : "✗"}`).join(", ");
+    warn(`whisper.cpp not built yet — only needed for Turkish/Arabic/other non-European speech. It builds on first use and needs git, cmake and a C++ compiler (${tools}${process.platform === "win32" ? "; compiler: Visual Studio Build Tools" : ""})`);
+  }
   const mem = /([\d.]+) GB available/.exec(c("Memory")?.detail ?? "");
   if (mem) Number(mem[1]) < 2 ? warn(`only ${mem[1]} GB RAM free — render with --workers 1–2`) : ok(`${mem[1]} GB RAM free`);
 }

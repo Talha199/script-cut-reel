@@ -1,6 +1,6 @@
 ---
 name: script-cut-reel
-description: Turn a raw talking-head recording with retakes into a finished, captioned Instagram Reel / short using HyperFrames — compare the transcript against the user's script to drop false starts and repeated takes, open on the strongest hook line with a headline on the first frame, remove silent pauses (protecting recitation), tone-map iPhone HDR, optionally speed up, lay a music bed under the speech, burn in word-highlight captions inside Instagram's safe zones, then loudness-finalize and write a publish package (cover, caption skeleton, upload checklist). Use when the user hands over a raw video (often with mistakes and repeated lines), a script, and optionally an intro clip and background music, and wants a clean reel / short / sermon clip / announcement. Works in any language Parakeet transcribes (German, English, Turkish, French, …).
+description: Turn a raw talking-head recording with retakes into a finished, captioned Instagram Reel / short using HyperFrames — compare the transcript against the user's script to drop false starts and repeated takes, open on the strongest hook line with a headline on the first frame, remove silent pauses (protecting recitation), tone-map iPhone HDR, optionally speed up, lay a music bed under the speech, burn in word-highlight captions inside Instagram's safe zones, then loudness-finalize and write a publish package (cover, caption skeleton, upload checklist). Use when the user hands over a raw video (often with mistakes and repeated lines), a script, and optionally an intro clip and background music, and wants a clean reel / short / sermon clip / announcement. Works in German, English, French and the other European languages Parakeet covers, and in Turkish or Arabic via Whisper large-v3.
 ---
 
 # Script-cut reel
@@ -40,7 +40,7 @@ every second without information costs viewers, one idea per Reel, and an ending
 ```bash
 node <SKILL>/scripts/doctor.mjs                     # checks everything below, prints the fix for each gap
 npx -y hyperframes@0.8 browser ensure            # see gotchas: may hang AFTER finishing
-npx -y hyperframes@0.8 models install parakeet   # ~640 MB, multilingual ASR
+npx -y hyperframes@0.8 models install parakeet   # ~640 MB, ASR for 25 European languages
 node <SKILL>/scripts/selftest.mjs --render          # whole pipeline on synthetic media, ~1 min
 ```
 
@@ -48,8 +48,12 @@ Needs Node ≥ 22 (HyperFrames' minimum), ffmpeg ≥ 5.1 with zscale (any full b
 use. Always call HyperFrames as `npx -y hyperframes@0.8 …`: without `-y` npx stops to ask before
 installing, and the pinned minor version is the one this skill is tested with.
 
-Low RAM (doctor warns under ~2 GB free) → render with `--workers 2` and tell the user that
-closing apps helps. Long installs: run them in the background and keep working.
+Turkish, Arabic or another non-European language: transcription uses Whisper large-v3 instead,
+which HyperFrames compiles (whisper.cpp) and downloads (~3 GB) on first use — that needs git, cmake
+and a C++ compiler (Windows: Visual Studio Build Tools); `doctor` shows what's missing.
+
+Low RAM (doctor warns under ~2 GB free) → `render.mjs --workers 1` and tell the user that closing
+apps helps. Long installs: run them in the background and keep working.
 
 ### 2. Project + media
 
@@ -72,9 +76,14 @@ The main re-encode takes minutes: run it in the background and transcribe meanwh
 ### 3. Transcribe, read it against the script, choose takes and the hook
 
 ```bash
-node <SKILL>/scripts/transcribe.mjs --project <dir> --language de
+node <SKILL>/scripts/transcribe.mjs --project <dir> --language de   # or tr, en, …
 node <SKILL>/scripts/lines.mjs --project <dir>
 ```
+
+The engine follows the language: Parakeet for its 25 European languages (German, English, French, …
+— fast, precise word times), Whisper large-v3 for everything else, Turkish included (Parakeet has no
+Turkish or Arabic). Neither transcribes Arabic phrases inside German/Turkish speech reliably —
+that's what audit item 1 is for.
 
 `lines` prints the transcript split at pauses with **raw** timestamps and word indices. Walk it
 alongside the script and build a table for the user: raw range · content · keep/cut · why.
@@ -193,17 +202,21 @@ One `lint` warning (`composition_file_too_large`) is expected.
 ### 7. Render, finalize, package
 
 ```bash
-npx -y hyperframes@0.8 render -o out/<name>.mp4 --fps 30 --quality high --workers 2
-node <SKILL>/scripts/finalize.mjs out/<name>.mp4        # → out/<name>.final.mp4 + .qa.json
-node <SKILL>/scripts/package.mjs out/<name>.final.mp4   # → .publish.md, .cover.jpg, .cover-grid.jpg
+node <SKILL>/scripts/render.mjs --project <dir> --name <name>   # render → finalize → package
+node <SKILL>/scripts/render.mjs --project <dir> --draft         # quick low-quality preview only
 ```
 
-Render in the background (~8 min per 75 s of 1080×1920 on a laptop iGPU). Write each new version to a
-new file name so earlier exports survive.
+`render.mjs` picks the fastest settings the machine supports — workers calibrated by HyperFrames,
+GPU encoding (NVENC / VideoToolbox / Quick Sync) when one works — never overwrites an earlier export
+(`<name>.mp4`, `<name>-2.mp4`, …), refuses a build that still has `--guides`, then runs `finalize`
+and `package`. Run it in the background. Time is dominated by HyperFrames capturing one browser
+screenshot per frame: ~0.3× realtime for clean frames on a mid-range desktop (a 60 s Reel ≈ 3–4 min),
+slower for grainy footage — much slower than an NLE like Resolve, by design. For review, prefer
+Studio (`preview`) or `--draft` over full renders.
 
 `finalize` normalises the finished mix in two passes to −14 LUFS / −1 dBTP (`--lufs -16` for a
-quieter master; no platform publishes a target), copies the video stream untouched and checks size,
-frame rate, codec, colour tags and loudness. `package` grabs the cover (frame 0 when the hook is on
+quieter master; no platform publishes a target), copies the video stream (fixing incomplete colour
+tags; re-encoding only above 25 Mbit/s) and checks size, frame rate, codec, colour tags and loudness. `package` grabs the cover (frame 0 when the hook is on
 it) plus a preview of the 3:4 grid crop, and writes `<name>.publish.md`. **Fill in its Caption and
 Alt text sections** from the transcript at its end: line 1 ≤ ~125 characters with the topic keyword
 first, 2–5 sentences, one send/save CTA, ≤ 5 specific hashtags (Instagram's limit). Then show the
@@ -212,7 +225,7 @@ Trial Reel or not). Nothing is posted by the skill.
 
 If the user wants to render themselves, start Studio (`npx -y hyperframes@0.8 preview <dir>` — in
 desktop apps use a launch config with `--foreground --no-open --port 3002`), point them to
-**Export** (top right), then run finalize and package on their export.
+**Export** (top right), then run `finalize.mjs <export>` and `package.mjs <export>.final.mp4` on it.
 
 ## Sound effects
 

@@ -12,7 +12,8 @@ music ─────────┘    Instagram's safe zones · music bed · �
 ```
 
 Built on [HyperFrames](https://www.npmjs.com/package/hyperframes) (HTML compositions rendered to MP4)
-with local, offline transcription (Parakeet TDT v3, 25 European languages).
+with local, offline transcription (Parakeet TDT v3 for 25 European languages, Whisper large-v3 for
+Turkish, Arabic and others).
 
 ## What it does
 
@@ -88,9 +89,8 @@ cp $S/../templates/glossary.de.json     my-reel/edit/glossary.json  # optional
 node $S/audit.mjs      --project my-reel
 node $S/build.mjs      --project my-reel --guides   # check snapshots against the safe zones…
 node $S/build.mjs      --project my-reel            # …then rebuild without guides
-cd my-reel && npx -y hyperframes@0.8 lint && npx -y hyperframes@0.8 render -o out/reel.mp4 --workers 2
-node $S/finalize.mjs out/reel.mp4                   # → out/reel.final.mp4
-node $S/package.mjs  out/reel.final.mp4             # → out/reel.publish.md + cover
+npx -y hyperframes@0.8 lint my-reel
+node $S/render.mjs     --project my-reel --name reel  # render (GPU when available) → finalize → package
 ```
 
 Or open the HyperFrames Studio (`npx -y hyperframes@0.8 preview my-reel`), press **Export**, and run
@@ -101,12 +101,13 @@ Or open the HyperFrames Studio (`npx -y hyperframes@0.8 preview my-reel`), press
 | `setup.mjs` | project folders, fonts (Fontsource, OFL) and GSAP from npm, default sound effects |
 | `sfx.mjs` | synthesises the default sound effects (whoosh, swell, thump); `--audition` to listen |
 | `prep.mjs` | probe + re-encode main/intro/music; HDR tone-map, cover-crop; `--speed`, `--grade`, `--clean`, `--canvas`, `--fit`, `--audio-only` |
-| `transcribe.mjs` | word-level transcript via `hyperframes transcribe` (Parakeet) |
+| `transcribe.mjs` | word-level transcript via `hyperframes transcribe` — Parakeet for European languages, Whisper large-v3 for Turkish and others |
 | `lines.mjs` | transcript as timed lines with word indices |
 | `silences.mjs` | silent stretches from the waveform (auto threshold) |
 | `audit.mjs` | untranscribed speech, silence-over-word, speech rate → suggested speed |
 | `grade-test.mjs` | side-by-side colour candidates on one frame (naive vs tone-mapped for HDR) |
 | `build.mjs` | generates the HyperFrames `index.html` from `edit/project.json`, prints QA; `--guides` |
+| `render.mjs` | render with the machine's best settings (auto workers, GPU encode), then finalize + package |
 | `finalize.mjs` | two-pass loudness on the render, video copied (re-encoded only above 25 Mbit/s), QA report |
 | `package.mjs` | cover + grid preview + `publish.md` (caption skeleton, checklist) |
 | `doctor.mjs` | checks Node, ffmpeg filters, HyperFrames, browser, transcription model; prints fixes |

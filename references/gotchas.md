@@ -9,8 +9,17 @@
   in a wait loop on it; check the extracted files' size/mtime instead.
 - **System Chrome may time out** in `doctor` (`SIGKILL, ETIMEDOUT`); the managed headless shell
   avoids it.
-- **Low RAM** (8 GB laptops with ~1 GB free): renders work with `--workers 2`; expect ~8–10 min per
-  75 s of 1080×1920 at 30 fps.
+- **Render speed** (i7-10700F 8 cores, RTX 3060 Ti, 17 s test Reel): `--workers 2` 38.6 s · `auto`
+  (picked 4) 32.4 s · `auto --gpu` 30.7 s (encode 6.4 → 2.6 s). Capture — one Chrome screenshot per
+  frame — is ~70 % of the time: ~26 frames/s for clean frames, ~7.5 for grainy footage, and more
+  workers barely help. Linux (`beginframe` capture) was only ~15 % faster; `--experimental-fast-capture`
+  crashes on Windows and falls back, slower. `render.mjs` uses `auto` + `--gpu` when a GPU encoder works.
+- **Low RAM** (8 GB laptops with ~1 GB free): `render.mjs --workers 1`; HyperFrames also switches itself
+  to a 1-worker low-memory profile under 8 GB total (a 7 GB Docker container lost ffmpeg extractions).
+- **HyperFrames `--gpu` (NVENC) leaves primaries/transfer untagged** (only the matrix says bt709);
+  `finalize.mjs` writes the full BT.709 tags with the `h264_metadata` bitstream filter, no re-encode.
+- **Parakeet has no Turkish or Arabic** (25 European languages). HyperFrames' default Whisper model is
+  `small.en` (English-only) — `transcribe.mjs` always passes `--model large-v3` for other languages.
 - **npm walks up the tree**: installing into a temp folder without its own `package.json` installs
   into the nearest parent project (or nothing). `setup.mjs` writes one first.
 

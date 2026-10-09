@@ -45,6 +45,17 @@ export const hasFilter = (name) => {
   return new RegExp(`^\\s*\\S+\\s+${name}\\s`, "m").test(filterList);
 };
 
+// The hardware H.264 encoder HyperFrames' --gpu can use here, or null. Builds list nvenc/qsv even on
+// machines without that hardware, so each candidate has to encode one real frame.
+export function gpuEncoder() {
+  for (const enc of ["h264_nvenc", "h264_videotoolbox", "h264_qsv"]) {
+    const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=s=256x256:d=0.1", "-frames:v", "1",
+      "-pix_fmt", "yuv420p", "-c:v", enc, "-f", "null", "-"], { encoding: "utf8" });
+    if (r.status === 0) return enc;
+  }
+  return null;
+}
+
 export function ff(argv) {
   console.log("ffmpeg", argv.join(" "));
   execFileSync("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", ...argv], { stdio: "inherit" });
