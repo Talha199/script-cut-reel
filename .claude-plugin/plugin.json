@@ -1,0 +1,10 @@
+{
+  "name": "script-cut-reel",
+  "displayName": "Script-cut Reel",
+  "description": "Raw talking-head recording + script → finished, captioned Instagram Reel: retakes cut by the script, hook headline on frame 0, captions inside Instagram's safe zones, punch-ins, verse/quote cards, iPhone HDR fix, loudness master and a publish package. Rendered with HyperFrames.",
+  "author": { "name": "Talha199", "url": "https://github.com/Talha199" },
+  "homepage": "https://github.com/Talha199/script-cut-reel",
+  "repository": "https://github.com/Talha199/script-cut-reel",
+  "license": "MIT",
+  "keywords": ["video", "reels", "instagram", "captions", "talking-head", "hyperframes", "sermon"]
+}

@@ -15,6 +15,50 @@ Built on [HyperFrames](https://www.npmjs.com/package/hyperframes) (HTML composit
 with local, offline transcription (Parakeet TDT v3 for 25 European languages, Whisper large-v3 for
 Turkish, Arabic and others).
 
+## Install (Claude Code)
+
+**One command** — installs what's missing (Node 22, ffmpeg, HyperFrames' browser, the transcription
+model; it asks before each), puts the skill in `~/.claude/skills/script-cut-reel`, then runs a
+one-minute self-test. Re-run it any time to update.
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/Talha199/script-cut-reel/main/install.ps1 | iex
+```
+
+macOS / Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Talha199/script-cut-reel/main/install.sh | bash
+```
+
+**Or as a Claude Code plugin** (managed and updated through `/plugin`). In a Claude Code session:
+
+```text
+/plugin marketplace add Talha199/script-cut-reel
+/plugin install script-cut-reel@talha199
+```
+
+(from a terminal: `claude plugin marketplace add Talha199/script-cut-reel`, then
+`claude plugin install script-cut-reel@talha199`). Then tell Claude *"set up script-cut-reel on this
+machine"* — it checks the machine and installs what's missing after you agree. Updates: `/plugin` →
+Marketplaces → talha199 → Update marketplace (or Enable auto-update; it's off by default for
+third-party marketplaces).
+
+Use one of the two, not both — otherwise the skill loads twice.
+
+**Then** just ask Claude: *"Here's my raw video, the script and some music — make a clean Reel."*
+
+Turkish (or Arabic) recordings need one more thing once: transcription uses Whisper large-v3, which
+HyperFrames compiles on first use — install CMake and a C++ compiler (Windows: `winget install
+Kitware.CMake` plus Visual Studio Build Tools with "Desktop development with C++"; macOS:
+`xcode-select --install && brew install cmake`; Debian/Ubuntu: `sudo apt install build-essential cmake git`).
+`node scripts/doctor.mjs` shows whether it's ready.
+
+Claude Code asks before running each new kind of command; choose "don't ask again" for `node`,
+`npx -y hyperframes@0.8` and `ffmpeg` commands to make edits flow.
+
 ## What it does
 
 - **Take selection from the script** — the transcript is printed with timestamps next to your script;
@@ -51,7 +95,7 @@ Turkish, Arabic and others).
 Why these defaults: [`references/research-2026-10.md`](references/research-2026-10.md) (sources and
 evidence grades — what Instagram confirmed vs. creator folklore).
 
-## Requirements
+## Requirements (what the installer sets up)
 
 - Node.js ≥ 22 (HyperFrames' minimum), ffmpeg ≥ 5.1 + ffprobe on `PATH` with `zscale` (Windows:
   `winget install Gyan.FFmpeg`, macOS: `brew install ffmpeg`, Debian/Ubuntu: `apt install ffmpeg`)
@@ -65,15 +109,6 @@ evidence grades — what Instagram confirmed vs. creator folklore).
 
 Tested on Windows 11 (PowerShell and Git Bash, paths with spaces and umlauts) and Debian 12 (Node 22,
 Debian's ffmpeg 5.1); macOS not yet. HyperFrames 0.8.143.
-
-## Install as a skill
-
-```bash
-# Claude Code (personal skills)
-git clone https://github.com/Talha199/script-cut-reel ~/.claude/skills/script-cut-reel
-```
-
-Then just ask: *"Here's my raw video, the script and some music — make a clean reel."*
 
 ## Use the scripts directly
 

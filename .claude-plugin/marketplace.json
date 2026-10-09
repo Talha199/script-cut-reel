@@ -1,0 +1,14 @@
+{
+  "name": "talha199",
+  "description": "Talha199's Claude Code plugins",
+  "owner": { "name": "Talha199", "url": "https://github.com/Talha199" },
+  "plugins": [
+    {
+      "name": "script-cut-reel",
+      "source": "./",
+      "description": "Raw talking-head recording + script → finished, captioned Instagram Reel (HyperFrames).",
+      "category": "video",
+      "tags": ["video", "reels", "captions"]
+    }
+  ]
+}

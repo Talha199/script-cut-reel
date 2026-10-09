@@ -35,14 +35,26 @@ every second without information costs viewers, one idea per Reel, and an ending
 
 ## Workflow
 
-### 1. Environment (first run on a machine)
+### 1. Setup (first run on a machine, or when the user asks to "set up script-cut-reel")
 
 ```bash
-node <SKILL>/scripts/doctor.mjs                     # checks everything below, prints the fix for each gap
-npx -y hyperframes@0.8 browser ensure            # see gotchas: may hang AFTER finishing
-npx -y hyperframes@0.8 models install parakeet   # ~640 MB, ASR for 25 European languages
-node <SKILL>/scripts/selftest.mjs --render          # whole pipeline on synthetic media, ~1 min
+node <SKILL>/scripts/doctor.mjs                     # what's there, what's missing, how to fix it
 ```
+
+If `node` itself is missing or the doctor reports ✗ lines, tell the user in one short list what is
+missing and what the installer would do (Node 22, ffmpeg via winget/Homebrew/apt, HyperFrames'
+browser, the ~640 MB Parakeet model), and **ask**. After a yes, run it in the background — it is
+non-interactive with `-Yes`/`--yes`, skips the skill folder with `-DepsOnly`/`--deps-only` (this
+copy is already installed), and ends with the doctor and a render self-test:
+
+```bash
+powershell -ExecutionPolicy Bypass -File "<SKILL>/install.ps1" -DepsOnly -Yes   # Windows (-SkipModel: no Parakeet)
+bash "<SKILL>/install.sh" --deps-only --yes                                    # macOS / Linux (--skip-model)
+```
+
+On Linux without Node 22 the installer stops and points to nodejs.org — distribution packages are
+too old. When everything is ✓, `node <SKILL>/scripts/selftest.mjs --render` (~1 min) proves the
+whole pipeline on this machine.
 
 Needs Node ≥ 22 (HyperFrames' minimum), ffmpeg ≥ 5.1 with zscale (any full build), internet on first
 use. Always call HyperFrames as `npx -y hyperframes@0.8 …`: without `-y` npx stops to ask before
