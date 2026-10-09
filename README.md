@@ -38,8 +38,9 @@ with local, offline transcription (Parakeet TDT v3, 25 European languages).
   3:4 profile-grid crop; `build.mjs --guides` overlays them for checking.
 - **Correct picture**: iPhone HLG HDR tone-mapped to BT.709, aspect mismatches cover-cropped (never
   letterboxed — Instagram recommends bordered Reels less), landscape recordings reframed to 9:16.
-- **Audio**: optional phone-voice cleanup, music bed ~20 dB under the voice, two-pass loudness
-  finalize to −14 LUFS / −1 dBTP.
+- **Audio**: optional phone-voice cleanup, music bed ~20 dB under the voice, optional quiet sound
+  effects on punch-ins, title and quote cards (our own synthesised set, or your files — peaks aligned
+  to the moment), two-pass loudness finalize to −14 LUFS / −1 dBTP, oversized renders re-encoded.
 - **Publish package**: cover + 3:4 grid preview, caption skeleton (keyword-first line, one send/save
   CTA, ≤ 5 hashtags), alt text, upload checklist (auto-captions off, Collab, Trial Reels), and what to
   read in Insights afterwards.
@@ -91,7 +92,8 @@ Or open the HyperFrames Studio (`npx hyperframes preview my-reel`), press **Expo
 
 | Script | Purpose |
 |---|---|
-| `setup.mjs` | project folders, fonts (Fontsource, OFL) and GSAP from npm |
+| `setup.mjs` | project folders, fonts (Fontsource, OFL) and GSAP from npm, default sound effects |
+| `sfx.mjs` | synthesises the default sound effects (whoosh, swell, thump); `--audition` to listen |
 | `prep.mjs` | probe + re-encode main/intro/music; HDR tone-map, cover-crop; `--speed`, `--grade`, `--clean`, `--canvas`, `--fit`, `--audio-only` |
 | `transcribe.mjs` | word-level transcript via `hyperframes transcribe` (Parakeet) |
 | `lines.mjs` | transcript as timed lines with word indices |
@@ -99,7 +101,7 @@ Or open the HyperFrames Studio (`npx hyperframes preview my-reel`), press **Expo
 | `audit.mjs` | untranscribed speech, silence-over-word, speech rate → suggested speed |
 | `grade-test.mjs` | side-by-side colour candidates on one frame (naive vs tone-mapped for HDR) |
 | `build.mjs` | generates the HyperFrames `index.html` from `edit/project.json`, prints QA; `--guides` |
-| `finalize.mjs` | two-pass loudness on the render, video copied, QA report |
+| `finalize.mjs` | two-pass loudness on the render, video copied (re-encoded only above 25 Mbit/s), QA report |
 | `package.mjs` | cover + grid preview + `publish.md` (caption skeleton, checklist) |
 
 Field reference: [`references/project-schema.md`](references/project-schema.md) ·

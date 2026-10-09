@@ -3,11 +3,13 @@
 //   edit/transcript.json  — word timings of the RAW main video [{text,start,end}] (transcribe.mjs)
 //   edit/silences.json    — optional, silent stretches in RAW time (silences.mjs)
 //   edit/glossary.json    — optional, {"word": "Spelling"} applied to every caption word
+//   assets/sfx/*          — sound effects when project.sfx is on (sfx.mjs makes the defaults)
 //   edit/project.json     — the edit: kept segments, hook, title, music, captions (see references/project-schema.md)
 // Writes index.html + edit/timeline.json and prints QA (length, first word, reading speed, pauses).
 //   node <skill>/scripts/build.mjs [--guides]
 // --guides overlays Instagram's safe zones and grid crops for `hyperframes snapshot`. Rebuild without
 // it before rendering.
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { args, exists, p, readJson } from "./lib.mjs";
 
@@ -331,6 +333,54 @@ const musicLane = JSON.stringify({ version: 1, lanes: [{ target: "volume", point
 const musicSrcStart = m.start ?? 0;
 if (media.music && media.music.duration - musicSrcStart < total) warn(`music (${media.music.duration}s) shorter than video (${total}s)`);
 
+// ── 4b. Sound effects (opt-in: "sfx": true or an object) ──
+// Quiet accents on what the picture already does: a whoosh on each punch-in and on the title's
+// entrance, a swell under a quote card, optionally a low thump when the hook lands. Each file's
+// loudest 20 ms is measured, so its peak — not its start — falls on the moment, and every file is
+// levelled to the same peak first, so your own files sit at the same level as the defaults.
+const SFX_BASE = { punch: ["whoosh", 0.22], card: ["swell", 0.28], title: ["whoosh", 0.18], hook: ["thump", 0.5] };
+const sfxOn = !!project.sfx;
+const sfxCfg = { punch: true, card: true, title: true, hook: false, level: 1, ...(typeof project.sfx === "object" ? project.sfx : {}) };
+const sfxInfo = new Map();
+function sfxFile(name) {
+  const rel = /[./\\]/.test(name) ? name : `assets/sfx/${name}.wav`;
+  if (sfxInfo.has(rel)) return sfxInfo.get(rel);
+  if (!exists(rel)) throw new Error(`sound effect ${rel} not found — run sfx.mjs for the defaults, or check the path in project.sfx`);
+  const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-i", p(rel), "-ac", "1", "-ar", "8000", "-f", "s16le", "-"], { maxBuffer: 1 << 26 });
+  const d = new Int16Array(r.stdout.buffer, r.stdout.byteOffset, r.stdout.length >> 1);
+  let best = 0, at = 0, peak = 0;
+  for (let i = 0; i + 160 <= d.length; i += 40) {
+    let e = 0;
+    for (let k = i; k < i + 160; k++) e += d[k] * d[k];
+    if (e > best) (best = e), (at = (i + 80) / 8000);
+  }
+  for (const v of d) peak = Math.max(peak, Math.abs(v));
+  const info = { file: rel, dur: d.length / 8000, peakAt: at, norm: 0.5 / Math.max(peak / 32768, 1e-4) }; // → −6 dBFS peak
+  sfxInfo.set(rel, info);
+  return info;
+}
+const sfxCues = [];
+if (sfxOn) for (const k of Object.keys(SFX_BASE)) if (typeof sfxCfg[k] === "string") sfxFile(sfxCfg[k]); // bad paths fail now, not later
+if (sfxOn) {
+  const want = [];
+  const add = (kind, t) => { const v = sfxCfg[kind]; if (v) want.push({ kind, t, name: v === true ? SFX_BASE[kind][0] : v }); };
+  framing.filter((x) => x.s > 1 && !x.dur).forEach((x) => add("punch", x.t));
+  cards.forEach((c) => add("card", c.t + 0.15));
+  if (title && !titleStatic) add("title", title.t + 0.3);
+  if (hook) add("hook", hook.t);
+  want.sort((a, b) => a.t - b.t);
+  let lastT = -Infinity;
+  for (const w of want) {
+    if (w.t - lastT < 1) continue; // never two accents within a second
+    const info = sfxFile(w.name);
+    const start = q(Math.max(0, w.t - info.peakAt));
+    const dur = q(Math.min(info.dur, total - start));
+    if (dur < 0.1) continue;
+    sfxCues.push({ kind: w.kind, file: info.file, start, dur, gain: +(SFX_BASE[w.kind][1] * sfxCfg.level * info.norm).toFixed(3) });
+    lastT = w.t;
+  }
+}
+
 // ── 5. QA ──
 const speech = mainClips.reduce((s, c) => s + c.dur, 0);
 const firstWord = capWords[0]?.start ?? null;
@@ -346,6 +396,7 @@ console.log(`QA  ${mmss(total)} · first word ${firstWord?.toFixed(2)} s · ${(c
   `captions ≤ ${maxCps.toFixed(1)} chars/s (${cps.filter((c) => c > 17).length} over 17) · longest pause ${pause.len.toFixed(2)} s @ ${pause.at.toFixed(1)} s`);
 if (zoomOn || cards.length) console.log(`    framing: ${framing.filter((x) => x.s !== 1).length} punch-ins (${framing.filter((x) => x.why === "cut").length} on cuts, ` +
   `${framing.filter((x) => x.why === "keyword").length} on keywords)${push ? ", 1 push" : ""} · quote cards: ${cards.length}${cards.length ? ` (${Math.round(cardTime / total * 100)} % of runtime)` : ""}`);
+if (sfxOn) console.log(`    sfx: ${Object.entries(sfxCues.reduce((o, c) => ((o[c.kind] = (o[c.kind] ?? 0) + 1), o), {})).map(([k, n]) => `${n} ${k}`).join(", ") || "none placed"}`);
 if (portrait && total > 180) warn(`${mmss(total)} is over 3:00 — Instagram doesn't recommend Reels longer than 3 minutes`);
 else if (portrait && total > 90) warn(`${mmss(total)} — 30–90 s Reels reach best; drop a passage or tighten pauses if the content allows`);
 if (firstWord !== null && firstWord > 0.3) warn(`first word at ${firstWord.toFixed(2)} s — open on speech`);
@@ -491,6 +542,7 @@ ${guidesHtml ? `
 <body>
   <div id="root" data-composition-id="root" data-start="0" data-duration="${f(total)}" data-fps="${FPS}" data-width="${W}" data-height="${H}">
 ${videoTags}
+${sfxCues.map((c, i) => `    <audio id="sfx-${i}" src="${c.file}" data-start="${f(c.start)}" data-duration="${f(c.dur)}" data-track-index="${11 + (i % 3)}" data-volume="${c.gain}"></audio>`).join("\n")}
 ${media.music ? `    <audio id="music" src="${media.music.file}" data-start="0" data-duration="${f(total)}" data-media-start="${musicSrcStart}" data-track-index="10" data-volume="1" data-automation='${musicLane}'></audio>` : ""}
     <div class="layer" id="gfx">
 ${showProgress ? `      <div id="progress"></div>` : ""}
@@ -574,6 +626,7 @@ fs.writeFileSync(p("edit/timeline.json"), JSON.stringify({
   title: title && { kicker: title.kicker, title: title.title, subtitle: title.subtitle, t: title.t, dur: title.dur },
   clips,
   framing,
+  sfx: sfxCues,
   quotes: cards.map((c) => ({ t: c.t, end: c.end, source: c.source, style: c.style, text: c.shown.join(" ") })),
   captions: capGroups.map((c, i) => ({ in: c.in, out: c.out, cps: +cps[i].toFixed(1), text: textOf(c.words) })),
 }, null, 2));

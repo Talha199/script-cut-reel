@@ -44,7 +44,7 @@ const flags = [
 const md = `# Publish package — ${name}   (${lang})
 
 ## File QA
-${qa ? `${qa.file} · ${qa.duration} s · ${qa.sizeMB} MB
+${qa ? `${qa.file} · ${qa.duration} s · ${qa.sizeMB} MB${qa.mbps ? ` · ${qa.mbps} Mbit/s` : ""}
 ${qa.video} · colour ${qa.color}
 ${qa.audio} · ${qa.loudness} LUFS · true peak ${qa.truePeak} dBTP${qa.firstWord !== undefined ? ` · first word ${qa.firstWord?.toFixed(2)} s · captions ≤ ${qa.maxCaptionCps} chars/s` : ""}
 ${qa.issues.length ? qa.issues.map((x) => `**! ${x}**`).join("\n") : "No QA issues."}` : "**Not finalized — run finalize.mjs on the render first (loudness, QA).**"}

@@ -137,6 +137,7 @@ Copy `<SKILL>/templates/project.example.json`; full field reference in
 - `edit/glossary.json`: copy `templates/glossary.de.json` / `glossary.tr.json` and extend it with the
   speaker's names and recurring terms — fixes them in every caption without per-index fixes.
 - `music.bed` (0.10 default), optional `theme`. No `introAfter` unless the user asked for the intro.
+- `sfx`: off by default. If the user wants sound effects, `"sfx": true` (see "Sound effects").
 
 Edit JSON with node/Python or the Edit tool, **never PowerShell `Get-Content`/`Set-Content`**
 (mangles UTF-8 and adds a BOM — see gotchas).
@@ -208,6 +209,24 @@ If the user wants to render themselves, start Studio (`npx hyperframes preview <
 desktop apps use a launch config with `--foreground --no-open --port 3002`), point them to
 **Export** (top right), then run finalize and package on their export.
 
+## Sound effects
+
+Off by default: there is no evidence that effects help retention, and on sermons they can feel
+cheap. When the user wants them, `"sfx": true` puts quiet accents only where the picture already
+moves — punch-ins, the title's entrance, quote cards (and the hook with `"hook": true`). Sources:
+- **Defaults** — `assets/sfx/whoosh.wav`, `swell.wav`, `thump.wav`, synthesised by `sfx.mjs`
+  (setup runs it): our own, no licence, no tones or instruments. `sfx.mjs --audition` writes
+  `out/sfx-audition.wav` to listen to them at mix level.
+- **Libraries**, when the user wants a different character: Pixabay sound effects (free, commercial
+  use, no attribution), or the HyperFrames media library —
+  `npx hyperframes media-use resolve --type sfx --intent "soft whoosh" --project <dir>`: offline it
+  picks from a small bundled Pixabay set (mostly UI/"tech" sounds); signed in to the HeyGen CLI it
+  searches HeyGen's large catalog. Put the file in `assets/sfx/` and point the cue at it
+  (`"sfx": {"punch": "assets/sfx/air.mp3"}`). Licence-free or royalty-free only — anything baked
+  into the video must be cleared, or Instagram may mute the Reel. No music stingers or chimes on
+  religious content unless the user asks (instruments).
+- Listen on a phone speaker: what is subtle on headphones can vanish there, and the reverse.
+
 ## Decisions that belong to the user
 
 Propose a default, explain the trade-off in one line, and ask:
@@ -236,6 +255,7 @@ Propose a default, explain the trade-off in one line, and ask:
 | "No zooms" / "more zooms" | `"zoom": false` / `zoom.minHold` 3 (never below 3 s); `zoom.punch` 1.15 for a stronger punch (≤ 1.2 — the picture softens beyond). |
 | "Zoom in on this line" | `captionEmphasis` on its key word (punch-in at that word) or `zoom.push` across the sentence (one per Reel). |
 | "Show the verse/quote on screen" | Only if it passes the quote-card rules; otherwise say why (paraphrase, unknown source) and offer the caption emphasis instead. |
+| "Add sound effects" / "louder" / "quieter" / "no whoosh on zooms" | `"sfx": true`; `sfx.level` 0.5–1.5; `"sfx": {"punch": false}`. Different sound → see "Sound effects". |
 | "Music louder/quieter" | `music.bed` (0.06–0.15; 0.10 ≈ −20 dB under the voice), `music.intro`. |
 | "Captions higher/lower" | `captions.bottom` (680 default; ≥ 600 keeps clear of Instagram's caption text). |
 | "Make a TikTok/Shorts version" | Upload the same final file: the caption band and title clear TikTok's and Shorts' interfaces too (third-party measurements). |

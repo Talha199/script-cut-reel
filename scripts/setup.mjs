@@ -1,10 +1,11 @@
 // Creates the project layout and fetches fonts (Fontsource, OFL) + GSAP from npm.
 //   node <skill>/scripts/setup.mjs [--project <dir>]
-// Layout:  assets/{fonts,vendor}  edit/  out/
-import { execSync } from "node:child_process";
+// Layout:  assets/{fonts,vendor,sfx}  edit/  out/
+import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { p, root } from "./lib.mjs";
 
 for (const d of ["assets/fonts", "assets/vendor", "edit", "out"]) fs.mkdirSync(p(d), { recursive: true });
@@ -31,5 +32,7 @@ for (const [from, to] of copies) {
   if (!fs.existsSync(from)) throw new Error(`missing ${from}`);
   fs.copyFileSync(from, p(to));
 }
+// Default sound effects (synthesised, licence-free) — used only when project.json turns "sfx" on.
+execFileSync(process.execPath, [path.join(path.dirname(fileURLToPath(import.meta.url)), "sfx.mjs"), "--project", root], { stdio: ["ignore", "ignore", "inherit"] });
 if (!fs.existsSync(p("edit/project.json"))) console.log("next: copy templates/project.example.json to edit/project.json after transcription");
 console.log(`project ready at ${root} (${copies.length} assets)`);

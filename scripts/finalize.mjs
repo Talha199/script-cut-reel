@@ -1,7 +1,9 @@
 // Delivery pass on a rendered MP4: two-pass loudness normalisation of the finished mix (the sources were
-// only normalised one by one), video stream copied untouched, faststart — plus a QA report that
-// package.mjs reads.
-//   node <skill>/scripts/finalize.mjs out/reel.mp4 [--out out/reel.final.mp4] [--lufs -14] [--tp -1]
+// only normalised one by one), faststart — plus a QA report that package.mjs reads. The video stream is
+// copied untouched unless it is over --max-mbps (default 25): grainy footage at the renderer's "high"
+// quality can reach hundreds of Mbit/s, while Instagram delivers ~3–4 Mbit/s whatever you upload — a
+// bloated file only makes the upload slow and fragile. Then it's re-encoded at CRF 18, capped at 16 Mbit/s.
+//   node <skill>/scripts/finalize.mjs out/reel.mp4 [--out out/reel.final.mp4] [--lufs -14] [--tp -1] [--max-mbps 25]
 // No platform publishes a loudness target; −14 LUFS / −1 dBTP is the common short-form practice and
 // keeps a Reel as loud as the ones around it. --lufs -16 for a quieter, more conservative master.
 import { spawnSync } from "node:child_process";
@@ -14,6 +16,13 @@ if (!input || !fs.existsSync(input)) throw new Error("usage: finalize.mjs <rende
 const output = path.resolve(typeof args.out === "string" ? args.out : input.replace(/(\.final)?\.mp4$/i, ".final.mp4"));
 if (output === input) throw new Error("--out must differ from the input");
 const I = Number(args.lufs ?? -14), TP = Number(args.tp ?? -1), LRA = 11;
+const src = probe(input);
+const mbps = (src.raw.size * 8) / src.duration / 1e6;
+const VIDEO = mbps > Number(args["max-mbps"] ?? 25)
+  ? ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-maxrate", "16M", "-bufsize", "32M", "-profile:v", "high", "-pix_fmt", "yuv420p",
+     "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
+  : ["-c:v", "copy"];
+if (VIDEO[1] !== "copy") console.log(`render is ${mbps.toFixed(0)} Mbit/s → re-encoding video (CRF 18, ≤ 16 Mbit/s)`);
 
 const measure = (file, af) => {
   const r = spawnSync("ffmpeg", ["-hide_banner", "-i", file, "-map", "0:a:0", "-af", af, "-f", "null", "-"], { encoding: "utf8" });
@@ -24,7 +33,7 @@ const measure = (file, af) => {
 
 const m1 = measure(input, `loudnorm=I=${I}:TP=${TP}:LRA=${LRA}:print_format=json`);
 console.log(`measured: ${m1.input_i} LUFS · ${m1.input_tp} dBTP · LRA ${m1.input_lra}`);
-ff(["-i", input, "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy",
+ff(["-i", input, "-map", "0:v:0", "-map", "0:a:0", ...VIDEO,
   "-af", `loudnorm=I=${I}:TP=${TP}:LRA=${LRA}:measured_I=${m1.input_i}:measured_TP=${m1.input_tp}:measured_LRA=${m1.input_lra}:measured_thresh=${m1.input_thresh}:offset=${m1.target_offset}:linear=true`,
   "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart", output]);
 
@@ -36,6 +45,7 @@ const qa = {
   file: path.relative(p(), output).replace(/\\/g, "/"),
   duration: +info.duration.toFixed(2),
   sizeMB: +(size / 1e6).toFixed(1),
+  mbps: +((size * 8) / info.duration / 1e6).toFixed(1),
   video: `${info.width}x${info.height} · ${info.fps} fps${Math.abs(info.fps - avgFps) > 0.01 ? ` (avg ${avgFps}: variable!)` : ""} · ${v.codec_name} ${v.profile ?? ""} · ${v.pix_fmt}`,
   color: `${v.color_space ?? "untagged"}/${v.color_primaries ?? "untagged"}/${v.color_transfer ?? "untagged"} · range ${v.color_range ?? "?"}`,
   audio: `${a.codec_name} · ${a.sample_rate} Hz · ${a.channels} ch`,
@@ -58,5 +68,5 @@ if (qa.truePeak > TP + 0.5) issues.push(`true peak ${qa.truePeak} dBTP over ${TP
 qa.issues = issues;
 const qaFile = output.replace(/\.mp4$/i, ".qa.json");
 fs.writeFileSync(qaFile, JSON.stringify(qa, null, 2) + "\n");
-console.log(`\n${qa.file} · ${qa.duration}s · ${qa.sizeMB} MB\n  ${qa.video}\n  colour ${qa.color}\n  ${qa.audio} · ${qa.loudness} LUFS · ${qa.truePeak} dBTP`);
+console.log(`\n${qa.file} · ${qa.duration}s · ${qa.sizeMB} MB · ${qa.mbps} Mbit/s\n  ${qa.video}\n  colour ${qa.color}\n  ${qa.audio} · ${qa.loudness} LUFS · ${qa.truePeak} dBTP`);
 console.log(issues.length ? issues.map((x) => `! ${x}`).join("\n") : "QA ok");

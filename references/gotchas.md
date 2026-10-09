@@ -33,6 +33,12 @@
 - Speed: do it in prep (`setpts` + `atempo`, pitch preserved) and divide raw times by the speed in
   build — simpler and more predictable than `data-playback-rate`. It is global: protected recitation
   spans get sped up too, so keep 1.0 when there is recitation.
+- SFX: a whoosh's loudest moment, not its start, belongs on the cut — `build.mjs` measures each file
+  and offsets it. A recipe's fade curve matters: `afade curve=qsin` rises steeply (sounds like a hard
+  start); `hsin` swells. Sub-bass (< 150 Hz) is inaudible on phone speakers — the thump gets tanh
+  harmonics for that.
+- Windows SAPI `SpeakProgress.AudioPosition` reports 3× too large with a 48 kHz output format (it
+  assumes 16 kHz) — only relevant when faking a test transcript from TTS.
 - `silencedetect` compares individual samples, not RMS: an auto threshold must be measured on window
   peaks (`silences.mjs` uses the 10th-percentile 50 ms peak + 6 dB, clamped −45…−30).
 - **iPhone video is HLG HDR** (`color_transfer=arib-std-b67`, BT.2020). Converted naively to 8-bit SDR
@@ -76,5 +82,7 @@
 - `composition_file_too_large` (one long generated file) is expected and harmless here.
 - `build.mjs --guides` writes the safe-zone overlay **into index.html**. Rebuild without it before
   rendering; `finalize.mjs` flags a render that still has guides (from `edit/timeline.json`).
+- `render --quality high` has no bitrate cap: grainy footage came out at ~270 Mbit/s (963 MB for 28 s).
+  `finalize.mjs` re-encodes above 25 Mbit/s (CRF 18, ≤ 16 Mbit/s); Instagram serves ~3–4 Mbit/s anyway.
 - HyperFrames already encodes BT.709 / TV range and tags it; `finalize.mjs` copies the video stream
   and only re-encodes audio (two-pass loudnorm), so the picture is never encoded twice.
