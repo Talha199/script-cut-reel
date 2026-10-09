@@ -15,4 +15,6 @@ execSync(`npx -y hyperframes@latest transcribe "${p("edit/main.wav")}" -d "${p("
 });
 const words = readJson("edit/asr/transcript.json").map(({ text, start, end }) => ({ text, start, end }));
 writeJson("edit/transcript.json", words);
+// build.mjs uses the language as the default `lang` (Turkish İ casing, quote style) and warns on a mismatch.
+writeJson("edit/transcribe.json", { language: typeof args.language === "string" ? args.language : null, engine });
 console.log(`${words.length} words → edit/transcript.json   (next: node scripts/lines.mjs)`);

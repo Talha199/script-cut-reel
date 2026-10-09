@@ -1,27 +1,29 @@
 {
   "lang": "de",
   "segments": [
-    { "in": 2.0, "out": 7.38, "note": "Hook line — the intro plays after this" },
+    { "in": 2.0, "out": 7.38, "note": "Hook line — the sharpest standalone sentence, spoken first" },
     { "in": 7.45, "out": 39.25, "note": "Part 1" },
     { "in": 69.05, "out": 105.4, "note": "Part 2 (final take; 39.4–69.0 were false starts)" },
-    { "in": 116.5, "out": 130.9, "note": "Closing (2nd take, runs into the outro)" }
+    { "in": 116.5, "out": 130.9, "note": "Closing (2nd take) — ends on the send-CTA line, hard cut" }
   ],
-  "introAfter": 0,
-  "introMuted": true,
-  "silence": { "minGap": 0.25, "keepAfter": 0.1, "keepBefore": 0.08 },
-  "music": { "bed": 0.12, "intro": 0.85, "fadeIn": 1.0, "fadeOut": 2.5 },
+  "hook": { "text": "Warum Allah *jedes* Gebet hört" },
   "title": {
-    "after": "intro",
-    "offset": 0.4,
-    "dur": 4.6,
+    "after": "hook",
+    "offset": 0.3,
+    "dur": 4.0,
     "kicker": "Freitagspredigt · 09.10.2026",
     "title": "Das Bittgebet",
     "subtitle": "Die Hinwendung zu Allah"
   },
+  "protect": [
+    { "in": 71.8, "out": 79.4, "note": "Qur'an verse — no pause is cut inside" }
+  ],
+  "music": { "bed": 0.10 },
   "refs": [],
   "captionInserts": [
     { "text": "(s)", "start": 69.95, "end": 71.75 }
   ],
+  "captionEmphasis": [57, 141],
   "captionFixes": {
     "8": "ist es",
     "24": "Problemen,",

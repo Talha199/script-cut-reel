@@ -31,9 +31,25 @@
   "video", several data streams). Always `-map 0:v:0 -map 0:a:0`.
 - Re-encode with `-g 30 -keyint_min 30`; sparse-GOP sources freeze on seek in the renderer.
 - Speed: do it in prep (`setpts` + `atempo`, pitch preserved) and divide raw times by the speed in
-  build — simpler and more predictable than `data-playback-rate`.
-- Grade: compare candidates on one frame (`grade-test.mjs`) before a minutes-long re-encode.
-  `eq=gamma=1.3` already looks milky on dark clothing; ~1.18 is a safe "a bit brighter".
+  build — simpler and more predictable than `data-playback-rate`. It is global: protected recitation
+  spans get sped up too, so keep 1.0 when there is recitation.
+- `silencedetect` compares individual samples, not RMS: an auto threshold must be measured on window
+  peaks (`silences.mjs` uses the 10th-percentile 50 ms peak + 6 dB, clamped −45…−30).
+- **iPhone video is HLG HDR** (`color_transfer=arib-std-b67`, BT.2020). Converted naively to 8-bit SDR
+  it looks grey and flat — which is why "a bit brighter" (gamma 1.18) used to be a standing request.
+  `prep.mjs` now tone-maps HLG/PQ to BT.709 automatically. The common recipe (`npl=100` + `hable`)
+  does **not** fix it: phone HLG has no mastering metadata, so `tonemap` finds no peak and reference
+  white stays at ~76 %. Measured on HLG patches 25/50/75/100 %: naive 25/50/75/100, npl=100 hable
+  26/49/76/100, **npl=203 mobius peak=4.93 → 28/56/85/100** (the default). Not yet checked on real
+  iPhone footage — look at `grade-test.mjs` (naive | tone-mapped | grades) the first time.
+- Grade: compare candidates on one frame (`grade-test.mjs`) before a minutes-long re-encode, always
+  against the tone-mapped panel. `eq=gamma=1.3` already looks milky on dark clothing; after tone-mapping
+  1.0–1.1 is usually enough.
+- Aspect mismatches are cover-cropped, not letterboxed (Instagram recommends bordered Reels less). A
+  16:9 intro on a 9:16 Reel loses 68 % of its width — `prep` warns; get a vertical version or use
+  `--intro-fit pad` knowingly.
+- ffmpeg writes colour tags from the frames, not only from `-color_primaries`: untagged SDR sources need
+  `setparams=…bt709` in the chain or the output is tagged "unknown".
 
 ## ASR / timing
 
@@ -58,3 +74,7 @@
 - Removing a multi-line CSS rule with `sed '/selector/d'` leaves its continuation line behind →
   `css_parse_error`. Edit generator source with a real editor.
 - `composition_file_too_large` (one long generated file) is expected and harmless here.
+- `build.mjs --guides` writes the safe-zone overlay **into index.html**. Rebuild without it before
+  rendering; `finalize.mjs` flags a render that still has guides (from `edit/timeline.json`).
+- HyperFrames already encodes BT.709 / TV range and tags it; `finalize.mjs` copies the video stream
+  and only re-encodes audio (two-pass loudnorm), so the picture is never encoded twice.
