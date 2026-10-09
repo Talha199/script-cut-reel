@@ -15,7 +15,7 @@
 // Re-run with only --main to change speed/grade; intro/music entries in media.json are kept.
 import fs from "node:fs";
 import path from "node:path";
-import { args, exists, ff, isHdr, p, probe, readJson, tonemapFilter, writeJson } from "./lib.mjs";
+import { args, exists, ff, hasFilter, isHdr, p, probe, readJson, tonemapFilter, writeJson } from "./lib.mjs";
 
 // Everything lands at the same loudness so the music bed level means the same thing on any source.
 // The finished mix gets its delivery loudness in finalize.mjs.
@@ -46,7 +46,9 @@ function fit(info, { width: W, height: H }, mode, label) {
 const TONEMAP = typeof args.tonemap === "string" ? args.tonemap : "mobius";
 // Scale/crop first, tone-map after: float tone-mapping on 4K 60 fps is several times slower.
 function videoChain(info, canvas, fitMode, label, extra = []) {
-  const hdr = isHdr(info) && TONEMAP !== "none";
+  if (isHdr(info) && TONEMAP !== "none" && !(hasFilter("zscale") && hasFilter("tonemap")))
+    console.warn(`! ${label} is HDR but this ffmpeg has no zscale/tonemap (built without zimg) — it will look grey. Use a full build (gyan.dev / BtbN on Windows, Homebrew, Debian/Ubuntu packages).`);
+  const hdr = isHdr(info) && TONEMAP !== "none" && hasFilter("zscale") && hasFilter("tonemap");
   if (isHdr(info)) console.log(`${label}: HDR (${info.color.transfer}) → ${hdr ? `tone-mapped to BT.709 (${TONEMAP})` : "NOT tone-mapped (--tonemap none)"}`);
   // setparams: ffmpeg writes colour tags from the frames, so untagged SDR sources need the label here.
   return { hdr, vf: [...extra.slice(0, 1), fit(info, canvas, fitMode, label), hdr && tonemapFilter(info, TONEMAP), ...extra.slice(1),
@@ -63,6 +65,7 @@ fs.mkdirSync(p("edit"), { recursive: true });
 
 if (typeof args.main === "string") {
   const info = probe(args.main);
+  if (!info.hasVideo || !info.hasAudio) throw new Error(`${args.main}: needs a video and an audio track (found video: ${info.hasVideo}, audio: ${info.hasAudio})`);
   const canvas = canvasFor(info, typeof args.canvas === "string" ? args.canvas : "auto");
   const speed = Number(args.speed ?? 1);
   if (!(speed >= 0.5 && speed <= 2)) throw new Error("--speed must be between 0.5 and 2");

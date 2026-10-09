@@ -38,10 +38,15 @@ every second without information costs viewers, one idea per Reel, and an ending
 ### 1. Environment (first run on a machine)
 
 ```bash
-npx -y hyperframes@latest doctor
-npx -y hyperframes@latest browser ensure          # see gotchas: may hang AFTER finishing
-npx -y hyperframes@latest models install parakeet # ~640 MB, multilingual ASR
+node <SKILL>/scripts/doctor.mjs                     # checks everything below, prints the fix for each gap
+npx -y hyperframes@0.8 browser ensure            # see gotchas: may hang AFTER finishing
+npx -y hyperframes@0.8 models install parakeet   # ~640 MB, multilingual ASR
+node <SKILL>/scripts/selftest.mjs --render          # whole pipeline on synthetic media, ~1 min
 ```
+
+Needs Node ≥ 22 (HyperFrames' minimum), ffmpeg ≥ 5.1 with zscale (any full build), internet on first
+use. Always call HyperFrames as `npx -y hyperframes@0.8 …`: without `-y` npx stops to ask before
+installing, and the pinned minor version is the one this skill is tested with.
 
 Low RAM (doctor warns under ~2 GB free) → render with `--workers 2` and tell the user that
 closing apps helps. Long installs: run them in the background and keep working.
@@ -163,8 +168,8 @@ verse or hadith as a moment of its own; `lower` keeps the face visible for short
 
 ```bash
 node <SKILL>/scripts/build.mjs --project <dir> --guides   # safe-zone overlay for checking only
-cd <dir> && npx hyperframes lint
-npx hyperframes snapshot --at "0,1.5,6.0,30.0,60.0" --no-end
+cd <dir> && npx -y hyperframes@0.8 lint
+npx -y hyperframes@0.8 snapshot --at "0,1.5,6.0,30.0,60.0" --no-end
 node <SKILL>/scripts/build.mjs --project <dir>            # rebuild WITHOUT guides before rendering
 ```
 
@@ -188,7 +193,7 @@ One `lint` warning (`composition_file_too_large`) is expected.
 ### 7. Render, finalize, package
 
 ```bash
-npx hyperframes render -o out/<name>.mp4 --fps 30 --quality high --workers 2
+npx -y hyperframes@0.8 render -o out/<name>.mp4 --fps 30 --quality high --workers 2
 node <SKILL>/scripts/finalize.mjs out/<name>.mp4        # → out/<name>.final.mp4 + .qa.json
 node <SKILL>/scripts/package.mjs out/<name>.final.mp4   # → .publish.md, .cover.jpg, .cover-grid.jpg
 ```
@@ -205,7 +210,7 @@ first, 2–5 sentences, one send/save CTA, ≤ 5 specific hashtags (Instagram's 
 user the package — the upload checklist matters (auto-captions off, Collab instead of a second upload,
 Trial Reel or not). Nothing is posted by the skill.
 
-If the user wants to render themselves, start Studio (`npx hyperframes preview <dir>` — in
+If the user wants to render themselves, start Studio (`npx -y hyperframes@0.8 preview <dir>` — in
 desktop apps use a launch config with `--foreground --no-open --port 3002`), point them to
 **Export** (top right), then run finalize and package on their export.
 
@@ -219,7 +224,7 @@ moves — punch-ins, the title's entrance, quote cards (and the hook with `"hook
   `out/sfx-audition.wav` to listen to them at mix level.
 - **Libraries**, when the user wants a different character: Pixabay sound effects (free, commercial
   use, no attribution), or the HyperFrames media library —
-  `npx hyperframes media-use resolve --type sfx --intent "soft whoosh" --project <dir>`: offline it
+  `npx -y hyperframes@0.8 media-use resolve --type sfx --intent "soft whoosh" --project <dir>`: offline it
   picks from a small bundled Pixabay set (mostly UI/"tech" sounds); signed in to the HeyGen CLI it
   searches HeyGen's large catalog. Put the file in `assets/sfx/` and point the cue at it
   (`"sfx": {"punch": "assets/sfx/air.mp3"}`). Licence-free or royalty-free only — anything baked

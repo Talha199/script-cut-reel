@@ -14,6 +14,11 @@
 - **npm walks up the tree**: installing into a temp folder without its own `package.json` installs
   into the nearest parent project (or nothing). `setup.mjs` writes one first.
 
+- **HyperFrames needs Node ≥ 22** — on 18/20 everything up to `build.mjs` works and then `lint`/`render`
+  refuse to start. `doctor.mjs` checks it.
+- **`npx hyperframes` without `-y` stops at "Ok to proceed?"** on a machine that hasn't cached it — an
+  agent waits forever. Always `npx -y hyperframes@0.8 …`.
+
 ## Windows / PowerShell
 
 - `Get-Content` without `-Encoding UTF8` reads UTF-8 as ANSI and `Set-Content -Encoding utf8` writes

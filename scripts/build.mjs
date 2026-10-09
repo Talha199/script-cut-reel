@@ -343,7 +343,7 @@ const sfxOn = !!project.sfx;
 const sfxCfg = { punch: true, card: true, title: true, hook: false, level: 1, ...(typeof project.sfx === "object" ? project.sfx : {}) };
 const sfxInfo = new Map();
 function sfxFile(name) {
-  const rel = /[./\\]/.test(name) ? name : `assets/sfx/${name}.wav`;
+  const rel = (/[./\\]/.test(name) ? name : `assets/sfx/${name}.wav`).replace(/\\/g, "/"); // URLs need "/"
   if (sfxInfo.has(rel)) return sfxInfo.get(rel);
   if (!exists(rel)) throw new Error(`sound effect ${rel} not found — run sfx.mjs for the defaults, or check the path in project.sfx`);
   const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-i", p(rel), "-ac", "1", "-ar", "8000", "-f", "s16le", "-"], { maxBuffer: 1 << 26 });

@@ -1,5 +1,5 @@
 // Shared helpers. Every script works on a project directory: --project <dir>, default cwd.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +27,23 @@ export const p = (...parts) => path.join(root, ...parts);
 export const readJson = (rel) => JSON.parse(fs.readFileSync(p(rel), "utf8").trimStart());
 export const writeJson = (rel, data) => fs.writeFileSync(p(rel), JSON.stringify(data, null, 2) + "\n", "utf8");
 export const exists = (rel) => fs.existsSync(p(rel));
+
+// HyperFrames CLI, pinned to one minor version (tested: 0.8.143) — every doc command uses the same.
+export const HF = "hyperframes@0.8";
+// Runs `npx -y hyperframes@0.8 …`. Windows needs a shell to start npx.cmd, so arguments are quoted for
+// cmd.exe there; elsewhere no shell is involved and paths with spaces, $ or quotes pass through as-is.
+export function hyperframes(argv, opts = {}) {
+  const full = ["-y", HF, ...argv.map(String)];
+  if (process.platform !== "win32") return spawnSync("npx", full, { encoding: "utf8", ...opts });
+  const q = (a) => (/[\s"&|<>^()]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a);
+  return spawnSync(`npx ${full.map(q).join(" ")}`, { shell: true, encoding: "utf8", ...opts });
+}
+
+let filterList = null;
+export const hasFilter = (name) => {
+  filterList ??= spawnSync("ffmpeg", ["-hide_banner", "-filters"], { encoding: "utf8" }).stdout ?? "";
+  return new RegExp(`^\\s*\\S+\\s+${name}\\s`, "m").test(filterList);
+};
 
 export function ff(argv) {
   console.log("ffmpeg", argv.join(" "));

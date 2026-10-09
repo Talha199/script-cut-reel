@@ -52,12 +52,18 @@ evidence grades — what Instagram confirmed vs. creator folklore).
 
 ## Requirements
 
-- Node.js ≥ 18, ffmpeg + ffprobe on `PATH` (with `zscale` — standard in the common Windows/macOS builds)
-- `npx hyperframes` (fetched on demand), its headless browser and the Parakeet model:
+- Node.js ≥ 22 (HyperFrames' minimum), ffmpeg ≥ 5.1 + ffprobe on `PATH` with `zscale` (Windows:
+  `winget install Gyan.FFmpeg`, macOS: `brew install ffmpeg`, Debian/Ubuntu: `apt install ffmpeg`)
+- HyperFrames 0.8 via `npx` (fetched on demand), its headless browser and the Parakeet model:
   ```bash
-  npx -y hyperframes@latest browser ensure
-  npx -y hyperframes@latest models install parakeet
+  npx -y hyperframes@0.8 browser ensure
+  npx -y hyperframes@0.8 models install parakeet
   ```
+- Check a machine: `node scripts/doctor.mjs` (lists what's missing and how to fix it), then
+  `node scripts/selftest.mjs --render` (the whole pipeline on synthetic media, about a minute).
+
+Tested on Windows 11 (PowerShell and Git Bash, paths with spaces and umlauts) and Debian 12 (Node 22,
+Debian's ffmpeg 5.1); macOS not yet. HyperFrames 0.8.143.
 
 ## Install as a skill
 
@@ -82,12 +88,12 @@ cp $S/../templates/glossary.de.json     my-reel/edit/glossary.json  # optional
 node $S/audit.mjs      --project my-reel
 node $S/build.mjs      --project my-reel --guides   # check snapshots against the safe zones…
 node $S/build.mjs      --project my-reel            # …then rebuild without guides
-cd my-reel && npx hyperframes lint && npx hyperframes render -o out/reel.mp4 --workers 2
+cd my-reel && npx -y hyperframes@0.8 lint && npx -y hyperframes@0.8 render -o out/reel.mp4 --workers 2
 node $S/finalize.mjs out/reel.mp4                   # → out/reel.final.mp4
 node $S/package.mjs  out/reel.final.mp4             # → out/reel.publish.md + cover
 ```
 
-Or open the HyperFrames Studio (`npx hyperframes preview my-reel`), press **Export**, and run
+Or open the HyperFrames Studio (`npx -y hyperframes@0.8 preview my-reel`), press **Export**, and run
 `finalize` / `package` on the export.
 
 | Script | Purpose |
@@ -103,6 +109,8 @@ Or open the HyperFrames Studio (`npx hyperframes preview my-reel`), press **Expo
 | `build.mjs` | generates the HyperFrames `index.html` from `edit/project.json`, prints QA; `--guides` |
 | `finalize.mjs` | two-pass loudness on the render, video copied (re-encoded only above 25 Mbit/s), QA report |
 | `package.mjs` | cover + grid preview + `publish.md` (caption skeleton, checklist) |
+| `doctor.mjs` | checks Node, ffmpeg filters, HyperFrames, browser, transcription model; prints fixes |
+| `selftest.mjs` | end-to-end run on synthetic media (`--render` for render/finalize/package) |
 
 Field reference: [`references/project-schema.md`](references/project-schema.md) ·
 Known pitfalls: [`references/gotchas.md`](references/gotchas.md) ·
