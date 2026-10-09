@@ -11,7 +11,10 @@
 # Safe to re-run: installs only what's missing, updates the skill folder, never touches other settings.
 param([switch]$DepsOnly, [switch]$Yes, [switch]$SkipModel, [string]$SkillDir = "$HOME\.claude\skills\script-cut-reel")
 
-$ErrorActionPreference = "Stop"
+# Not "Stop": Windows PowerShell turns a native tool's stderr (git's "Cloning into...", npx progress)
+# into errors whenever output is captured - e.g. when Claude Code runs this. Failures are caught by
+# explicit $LASTEXITCODE checks and throws instead.
+$ErrorActionPreference = "Continue"
 $Repo = "https://github.com/Talha199/script-cut-reel"
 $HF = "hyperframes@0.8"
 
