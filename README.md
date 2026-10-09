@@ -41,7 +41,7 @@ with local, offline transcription (Parakeet TDT v3, 25 European languages).
 
 ```bash
 # Claude Code (personal skills)
-git clone https://github.com/Talha199/60-second ~/.claude/skills/script-cut-reel
+git clone https://github.com/Talha199/script-cut-reel ~/.claude/skills/script-cut-reel
 ```
 
 Then just ask: *"Here's my raw video, the script, an intro and some music — make a clean reel."*
