@@ -33,11 +33,12 @@ const T = {
 
 const transcript = (timeline.captions ?? []).map((c) => c.text).join(" ");
 const dur = qa?.duration ?? timeline.total;
+const introClip = (timeline.clips ?? []).find((c) => c.kind === "intro");
 const flags = [
   `length ${dur?.toFixed?.(1)} s${dur > 180 ? " — OVER 3:00" : dur > 90 ? " — over 90 s" : ""}`,
   `speed ${timeline.speed ?? 1}×`,
   `protected spans ${(project.protect ?? []).length}`,
-  `intro ${project.introAfter !== undefined && project.introAfter !== null ? `after segment ${project.introAfter}` : "none"}`,
+  `intro ${introClip ? `${introClip.dur.toFixed(1)} s at ${introClip.start.toFixed(1)} s` : "none"}`,
   `music ${project.music ? `bed ${project.music.bed ?? 0.1}` : exists("edit/media.json") && readJson("edit/media.json").music ? "default bed" : "none"}`,
 ];
 
@@ -91,7 +92,7 @@ Alternative CTA for list / teaching clips: ${T.save}
 Open the Reel's Insights → Skip Rate and the retention chart. Compare with your own last Reels, not
 vendor benchmarks.
 - Cliff in the first 3 s → the hook (spoken line, headline or first frame) didn't land.
-- Dip at ${project.introAfter !== undefined && project.introAfter !== null ? "the intro" : "the title card"} → shorten or drop it.
+- Dip at ${introClip ? `the intro (${introClip.start.toFixed(1)} s)` : "the title card"} → shorten or drop it.
 - Slow slide → pacing; tighter cuts or a shorter Reel.
 - Drop before the payoff → move the payoff earlier.
 - Sends and saves per reach matter more than likes for reaching non-followers.

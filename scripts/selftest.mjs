@@ -1,5 +1,5 @@
 // End-to-end self-test on synthetic media, in a temp folder whose path has a space and an umlaut:
-// setup → prep (HDR tone-map, crop, voice cleanup, music, intro) → silences → audit → build (hook,
+// setup → prep (HDR tone-map, crop, voice cleanup, music, bundled intro) → silences → audit → build (hook,
 // title, quote card, punch-ins, protected span, glossary, emphasis, sound effects) → lint; with
 // --render also render.mjs (render → finalize → package). No transcription model needed: the transcript is
 // synthetic. Needs internet on the first run (fonts, GSAP, HyperFrames).
@@ -44,20 +44,20 @@ step("synthetic media", () => {
     "-f", "lavfi", "-i", "aevalsrc='0.25*sin(2*PI*180*t)*sin(2*PI*3*t)*(between(t,0.4,3.0)+between(t,4.0,6.6)+between(t,7.6,10.2))+0.002*(random(0)-0.5)':s=48000:d=12",
     "-vf", "setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc", "-c:v", "libx264", "-pix_fmt", "yuv420p",
     "-x264-params", "colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc", "-c:a", "aac", "-shortest", P("raw clip.mp4"));
-  ffmpeg("-f", "lavfi", "-i", "testsrc=s=1280x720:r=25:d=1.5", "-c:v", "libx264", "-pix_fmt", "yuv420p", P("intro.mp4"));
   ffmpeg("-f", "lavfi", "-i", "sine=f=220:d=20", "-c:a", "aac", P("music.m4a"));
   expect(probe(P("raw clip.mp4"))[0].color_transfer === "arib-std-b67", "test clip did not get its HLG tag");
 });
 
 step("setup.mjs", () => { run("setup.mjs"); expect(fs.existsSync(P("assets/vendor/gsap.min.js")) && fs.existsSync(P("assets/sfx/whoosh.wav")), "fonts/GSAP/sfx missing"); });
 
-step("prep.mjs (HDR, crop, --clean, intro, music)", () => {
-  const out = run("prep.mjs", "--main", P("raw clip.mp4"), "--intro", P("intro.mp4"), "--music", P("music.m4a"), "--clean");
+step("prep.mjs (HDR, crop, --clean, bundled intro, music)", () => {
+  const out = run("prep.mjs", "--main", P("raw clip.mp4"), "--intro", "hutbe", "--music", P("music.m4a"), "--clean");
   const m = json("edit/media.json");
   const [v] = probe(P("assets/main.mp4"));
   expect(v.width === 1080 && v.height === 1920, `main is ${v.width}x${v.height}`);
   expect(v.color_primaries === "bt709" && v.color_transfer === "bt709", `main tagged ${v.color_primaries}/${v.color_transfer}`);
   expect(probe(P("assets/intro.mp4"))[0].height === 1920, "intro not on canvas");
+  expect(m.intro.bundled === "hutbe" && m.intro.hasAudio === false, `bundled intro: ${JSON.stringify({ bundled: m.intro.bundled, hasAudio: m.intro.hasAudio })}`);
   return m.main.tonemapped ? "HDR tone-mapped" : (out.match(/! .*zscale.*/)?.[0] ?? "HDR NOT tone-mapped");
 });
 
@@ -73,7 +73,6 @@ step("transcript + project", () => {
   fs.writeFileSync(P("edit/project.json"), JSON.stringify({
     lang: "de",
     segments: [{ in: 0.3, out: 3.2 }, { in: 3.9, out: 10.4 }],
-    introAfter: 0, introMuted: true,
     hook: { text: "Warum Allah *jedes* Gebet hört" },
     title: { after: "hook", offset: 0.2, dur: 2, kicker: "Selbsttest · Çğışİ", title: "Das Bittgebet" },
     quotes: [{ src: 5.0, srcEnd: 6.6, source: "Test 1:1" }],
@@ -91,6 +90,9 @@ step("build.mjs", () => {
   const t = json("edit/timeline.json");
   expect(t.quotes.length === 1 && t.quotes[0].text === "Ich bin nahe.", `quote card: ${JSON.stringify(t.quotes)}`);
   expect(t.captions[0].text.startsWith("Warum hört Allah"), `glossary not applied: ${t.captions[0].text}`);
+  const ic = t.clips.find((c) => c.kind === "intro");
+  expect(ic && Math.abs(ic.start + ic.dur - t.clips.find((c) => c.seg === 1).start) < 0.02, `intro not placed after the hook segment: ${JSON.stringify(ic)}`);
+  expect(/"v":0\.8\b/.test(fs.readFileSync(P("index.html"), "utf8")), "music doesn't come up under the silent intro");
   expect(t.sfx.length >= 2, `${t.sfx.length} sound effects placed`);
   expect(/lang="de"/.test(fs.readFileSync(P("index.html"), "utf8")), "html lang missing");
   return `${t.total.toFixed(1)} s · ${t.captions.length} captions · ${t.framing.length} framing changes · ${t.sfx.length} sfx${/^! /m.test(out) ? " · warnings (expected on synthetic media)" : ""}`;

@@ -7,3 +7,6 @@ snapshots/
 index.html
 *.mp4
 *.wav
+
+# bundled brand intros (prep.mjs --intro <name>) are part of the skill
+!intros/*.mp4

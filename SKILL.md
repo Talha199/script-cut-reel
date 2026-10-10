@@ -21,7 +21,7 @@ The reasoning behind the defaults, with sources and evidence grades, is in
 | Raw recording | yes | Phone HEVC/HDR is fine. Retakes, "ach, okay", long silences are expected. |
 | Script | yes | The text that *should* be said. It decides which takes survive, the hook, and caption spelling. |
 | Music | no | Bed ~20 dB under the speech. Must be royalty-free/licensed — baked-in commercial music gets Reels muted. |
-| Intro clip | no | Not recommended (see "Intro"). If the user insists: ≤ 1.5–2 s, after the hook, never before it. |
+| Intro clip | no | Generic Reels: not recommended; if the user insists ≤ 1.5–2 s, after the hook, never before it. **Freitagspredigt / Hutbe Reels: always the bundled `hutbe` intro** (see "Bundled intro"). |
 
 If something is missing, ask once; don't block on optional inputs.
 
@@ -71,7 +71,7 @@ apps helps. Long installs: run them in the background and keep working.
 
 ```bash
 node <SKILL>/scripts/setup.mjs --project <dir>      # folders, fonts (Fontsource, OFL), GSAP
-node <SKILL>/scripts/prep.mjs --project <dir> --main <raw> [--music <music>] [--clean]
+node <SKILL>/scripts/prep.mjs --project <dir> --main <raw> [--music <music>] [--intro hutbe] [--clean]
 ```
 
 `prep` writes `edit/main.wav` first (16 kHz, raw timing), then re-encodes everything to the canvas
@@ -162,7 +162,8 @@ Copy `<SKILL>/templates/project.example.json`; full field reference in
 - `quotes`: quote cards — **only for direct quotes**, see the rules below.
 - `edit/glossary.json`: copy `templates/glossary.de.json` / `glossary.tr.json` and extend it with the
   speaker's names and recurring terms — fixes them in every caption without per-index fixes.
-- `music.bed` (0.10 default), optional `theme`. No `introAfter` unless the user asked for the intro.
+- `music.bed` (0.10 default), optional `theme`. A prepped intro plays after segment 0 (the hook) by
+  default; `introAfter` moves it, `"introAfter": null` drops it.
 - `sfx`: off by default. If the user wants sound effects, `"sfx": true` (see "Sound effects").
 
 Edit JSON with node/Python or the Edit tool, **never PowerShell `Get-Content`/`Set-Content`**
@@ -239,6 +240,24 @@ If the user wants to render themselves, start Studio (`npx -y hyperframes@0.8 pr
 desktop apps use a launch config with `--foreground --no-open --port 3002`), point them to
 **Export** (top right), then run `finalize.mjs <export>` and `package.mjs <export>.final.mp4` on it.
 
+## Bundled intro
+
+`intros/hutbe.mp4` is the organisation's series intro for the Friday-sermon Reels: a 3.8 s paper
+title card, "Freitagspredigt in unter 60 Sekunden", 1080×1920, silent. **Every Freitagspredigt /
+Hutbe Reel gets it** — the organisation decided, so don't argue the 2 s guideline or ask:
+
+```bash
+node <SKILL>/scripts/prep.mjs --project <dir> --main <raw> --music <music> --intro hutbe
+```
+
+- It plays right after the hook segment (segment 0) — the speaker's spoken opener ("Du hast die
+  Freitagspredigt verpasst? … in 60 Sekunden") leads straight into the card. The hook headline ends
+  with segment 0, and the title (`after: "hook"`) waits until the intro has played.
+- The clip is silent, so the music rises to `music.intro` (0.8) inside the intro and is back at the
+  bed by the next spoken word. Without `--music` that is 3.8 s of silence — build warns; get a bed.
+- Its own text promises "unter 60 Sekunden": say so with numbers when the Reel runs longer.
+- More intros: drop `<name>.mp4` into `intros/` and commit it; `--intro <name>` picks it up.
+
 ## Sound effects
 
 Off by default: there is no evidence that effects help retention, and on sermons they can feel
@@ -266,7 +285,7 @@ Propose a default, explain the trade-off in one line, and ask:
 | Opening greeting / Basmala / salawat | Move out of the first 3 s (to the end or the caption) | Religious and cultural obligation outweighs retention advice |
 | Speed-up or pause cuts on recitation, scripture, du'a | `protect` it; speed 1.0 | Tempo and pauses are part of correct recitation |
 | Instrumental music | Offer voice-only or a non-instrumental bed too | Many Muslim audiences avoid instruments |
-| Brand intro clip | None — the kicker carries the brand; ≤ 1.5–2 s if wanted | The organisation's call; the retention chart can settle it |
+| Brand intro clip | Freitagspredigt Reels: the bundled `hutbe` intro (decided). Otherwise none — the kicker carries the brand; ≤ 1.5–2 s if wanted | The organisation's call; the retention chart can settle it |
 | Images / B-roll for spiritual statements | Typographic cards only | Aniconism and tone |
 | Call-to-action wording | One send- or save-type line | Some congregations dislike "share" asks |
 | Political / social-issue topics | Flag it | Instagram won't recommend it to non-followers |
@@ -281,7 +300,8 @@ Propose a default, explain the trade-off in one line, and ask:
 | "Brighter / darker" | First check `media.json` → `main.tonemapped` (HDR handled?). Then `grade-test.mjs --main <raw>` → `edit/grade-test.png` → `prep.mjs --main <raw> --grade "<filter>"`. After tone-mapping, gamma 1.0–1.1 is usually enough. |
 | "Sounds noisy / boomy" | `prep.mjs --main <raw> --clean`, then re-run `silences.mjs` (the WAV changes too). |
 | "Remove the pauses" / "keep pauses" | on by default when `edit/silences.json` exists; `"silence": false` disables, `keepAfter`/`keepBefore` tune the breath, `protect` keeps them in a range. |
-| "Add our intro" | Say once what it likely costs (viewers leave in the first seconds); then `prep --intro`, `"introAfter": 0`, warn if > 2 s. `introMuted` + `music.intro` 0.8–0.9 if its sound is unwanted. |
+| "Add our intro" | Say once what it likely costs (viewers leave in the first seconds); then `prep --intro <file>` (plays after the hook by default), warn if > 2 s. `introMuted` if its sound is unwanted — the music then comes up to `music.intro` (0.8) under it. |
+| "Without the intro" (Hutbe) | `"introAfter": null`, rebuild — no re-prep needed. |
 | "No zooms" / "more zooms" | `"zoom": false` / `zoom.minHold` 3 (never below 3 s); `zoom.punch` 1.15 for a stronger punch (≤ 1.2 — the picture softens beyond). |
 | "Zooms too abrupt" / "snappier zooms" | `zoom.smooth` 0.9–1.2 for a slower glide / 0.3 for a snap; 0 = hard punch-in. |
 | "Zoom in on this line" | `captionEmphasis` on its key word (punch-in at that word) or `zoom.push` across the sentence (one per Reel). |
@@ -314,7 +334,7 @@ profile-grid crop (y 240–1680):
   small caps under a short rule; full-frame dim or a lower panel; words brighten as spoken.
 - **Motion**: decelerating entrances (`power2.out`, 180–800 ms), no bounce or overshoot. Overlays that
   change the whole frame (quote-card dim, title, hook exit) fade over 0.45–0.8 s — shorter reads as a cut.
-- **No** progress line, **no** fade to black, **no** default intro. Accent `#e6bf63` (gold) on a dark
+- **No** progress line, **no** fade to black, no intro except the bundled series intro. Accent `#e6bf63` (gold) on a dark
   green-black scrim; `theme` changes it.
 
 ## References

@@ -12,10 +12,12 @@
 // - aspect mismatches are cover-cropped (Instagram recommends Reels with borders less); --fit pad
 //   letterboxes instead. --canvas portrait turns a landscape recording into a 9:16 Reel; --focus-x
 //   (0 = left edge, 1 = right) keeps the speaker in frame.
+// - --intro takes a file or the name of a bundled intro in <skill>/intros/ (--intro hutbe)
 // Re-run with only --main to change speed/grade; intro/music entries in media.json are kept.
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { args, exists, ff, hasFilter, isHdr, p, probe, readJson, tonemapFilter, writeJson } from "./lib.mjs";
+import { args, exists, ff, hasFilter, isHdr, p, probe, readJson, SKILL_DIR, tonemapFilter, writeJson } from "./lib.mjs";
 
 // Everything lands at the same loudness so the music bed level means the same thing on any source.
 // The finished mix gets its delivery loudness in finalize.mjs.
@@ -82,13 +84,29 @@ if (typeof args.main === "string") {
 }
 
 if (typeof args.intro === "string") {
-  const info = probe(args.intro);
+  // A bare name (no such file) picks a bundled intro: --intro hutbe → <skill>/intros/hutbe.mp4
+  const bundledPath = path.join(SKILL_DIR, "intros", `${args.intro}.mp4`);
+  const bundled = !fs.existsSync(args.intro) && fs.existsSync(bundledPath) ? args.intro : null;
+  if (!bundled && !fs.existsSync(args.intro)) {
+    const names = fs.existsSync(path.join(SKILL_DIR, "intros")) ? fs.readdirSync(path.join(SKILL_DIR, "intros")).filter((x) => x.endsWith(".mp4")).map((x) => x.slice(0, -4)) : [];
+    throw new Error(`--intro ${args.intro}: no such file${names.length ? ` (bundled intros: ${names.join(", ")})` : ""}`);
+  }
+  const src = bundled ? bundledPath : args.intro;
+  const info = probe(src);
+  // An audio stream of pure digital silence (common in exported title animations) counts as none.
+  if (info.hasAudio) {
+    const vd = spawnSync("ffmpeg", ["-hide_banner", "-i", src, "-map", "0:a:0", "-af", "volumedetect", "-f", "null", "-"], { encoding: "utf8" });
+    const peak = (vd.stderr ?? "").match(/max_volume: (-inf|-?[\d.]+) dB/)?.[1];
+    if (peak === "-inf" || (peak !== undefined && Number(peak) <= -80)) info.hasAudio = false; // volumedetect reports digital silence as -91 dB
+
+  }
   const canvas = media.main?.canvas ?? canvasFor(info);
   const fitMode = args["intro-fit"] === "pad" ? "pad" : "crop";
   const { hdr, vf } = videoChain(info, canvas, fitMode, "intro");
-  media.intro = { source: path.resolve(args.intro), file: "assets/intro.mp4", ...info, fit: fitMode, tonemapped: hdr };
-  if (info.duration > 2) console.warn(`! intro is ${info.duration.toFixed(1)} s — anything over ~1.5–2 s before the talk resumes costs viewers; see SKILL.md "Intro"`);
-  ff(["-i", args.intro, "-map", "0:v:0", ...(info.hasAudio ? ["-map", "0:a:0"] : []), "-vf", vf, ...VIDEO_OUT,
+  media.intro = { source: path.resolve(src), bundled, file: "assets/intro.mp4", ...info, fit: fitMode, tonemapped: hdr };
+  if (bundled) console.log(`intro: bundled "${bundled}" · ${info.duration.toFixed(2)} s${info.hasAudio ? "" : " · silent (the music carries it)"}`);
+  else if (info.duration > 2) console.warn(`! intro is ${info.duration.toFixed(1)} s — anything over ~1.5–2 s before the talk resumes costs viewers; see SKILL.md "Intro"`);
+  ff(["-i", src, "-map", "0:v:0", ...(info.hasAudio ? ["-map", "0:a:0"] : []), "-vf", vf, ...VIDEO_OUT,
     ...(info.hasAudio ? ["-af", LOUDNORM, ...AUDIO_OUT] : ["-an"]), "-movflags", "+faststart", p("assets/intro.mp4")]);
 }
 

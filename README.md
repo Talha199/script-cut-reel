@@ -89,8 +89,8 @@ Claude Code asks before running each new kind of command; choose "don't ask agai
 - **Publish package**: cover + 3:4 grid preview, caption skeleton (keyword-first line, one send/save
   CTA, ≤ 5 hashtags), alt text, upload checklist (auto-captions off, Collab, Trial Reels), and what to
   read in Insights afterwards.
-- Restrained graphics: hook headline, serif title card, quote cards, optional source chips. No intro, progress bar
-  or fade to black by default — each is opt-in.
+- Restrained graphics: hook headline, serif title card, quote cards, optional source chips. No progress bar
+  or fade to black by default. Bundled intros live in `intros/` (`prep.mjs --intro hutbe`; plays after the hook).
 
 Why these defaults: [`references/research-2026-10.md`](references/research-2026-10.md) (sources and
 evidence grades — what Instagram confirmed vs. creator folklore).

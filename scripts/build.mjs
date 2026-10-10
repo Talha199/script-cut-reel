@@ -77,6 +77,9 @@ function splitSegment(a, b) {
   return pieces;
 }
 
+// A prepped intro plays right after the hook segment unless project.json says otherwise
+// ("introAfter": null leaves it out without re-running prep).
+const introAfter = project.introAfter !== undefined ? project.introAfter : media.intro ? 0 : null;
 const clips = [];
 let t = 0;
 let intro = null;
@@ -86,7 +89,7 @@ project.segments.forEach((seg, i) => {
     clips.push({ id: `seg-${i}-${k}`, seg: i, kind: "main", start: q(t), dur, mediaStart: a / SP, srcIn: a, srcOut: b });
     t = q(t + dur);
   });
-  if (media.intro && project.introAfter === i) {
+  if (media.intro && introAfter === i) {
     intro = { id: "intro", kind: "intro", start: q(t), dur: q(media.intro.duration) };
     clips.push(intro);
     t = q(t + intro.dur);
@@ -96,7 +99,7 @@ const total = q(t);
 const mainClips = clips.filter((c) => c.kind === "main");
 const rawKept = project.segments.reduce((s, x) => s + x.out - x.in, 0);
 console.log(`segments ${rawKept.toFixed(1)}s raw → ${mainClips.reduce((s, c) => s + c.dur, 0).toFixed(1)}s after silence removal + ${SP}x`);
-if (intro && intro.dur > 2) warn(`intro is ${intro.dur.toFixed(1)} s — over ~1.5–2 s it reads as "skip"; shorten it or use none`);
+if (intro && intro.dur > 2 && !media.intro.bundled) warn(`intro is ${intro.dur.toFixed(1)} s — over ~1.5–2 s it reads as "skip"; shorten it or use none`);
 
 // Raw source time → composition time. Times inside a removed pause snap to the nearest kept piece
 // of the same segment; times outside every kept segment return null.
@@ -323,11 +326,17 @@ if (zoomOn) {
 
 // ── 4. Music bed: level under speech, its own level during the intro, fade in/out ──
 // Linear gains on −16 LUFS tracks: bed 0.10 ≈ −20 dB under the voice (accessibility guidance: ≥ 20 dB).
-const m = { bed: 0.1, intro: 0.0, fadeIn: 0.4, fadeOut: 1.2, ...(project.music ?? {}) };
+// A silent (or muted) intro would be seconds of dead air: the music comes up to carry it.
+const introSilent = intro && (!media.intro.hasAudio || project.introMuted);
+const m = { bed: 0.1, intro: introSilent ? 0.8 : 0.0, fadeIn: 0.4, fadeOut: 1.2, ...(project.music ?? {}) };
+if (introSilent && !media.music) warn(`the intro is silent and there's no music — ${intro.dur.toFixed(1)} s of silence; add --music in prep`);
 const musicPts = [{ t: 0, v: 0 }, { t: m.fadeIn, v: m.bed }];
 if (intro) {
-  musicPts.push({ t: Math.max(m.fadeIn, intro.start - 0.25), v: m.bed }, { t: intro.start, v: m.intro });
-  musicPts.push({ t: intro.start + intro.dur, v: m.intro }, { t: intro.start + intro.dur + 0.5, v: m.bed });
+  // Rise and fall inside the intro, so neither the hook's last word nor the first word after the intro
+  // is under the louder music.
+  const ramp = Math.min(0.4, intro.dur / 4);
+  musicPts.push({ t: Math.max(m.fadeIn, intro.start), v: m.bed }, { t: intro.start + ramp, v: m.intro });
+  musicPts.push({ t: intro.start + intro.dur - ramp, v: m.intro }, { t: intro.start + intro.dur, v: m.bed });
 }
 musicPts.push({ t: total - m.fadeOut, v: m.bed }, { t: total, v: 0 });
 const musicLane = JSON.stringify({ version: 1, lanes: [{ target: "volume", points: musicPts.map((x) => ({ t: +q(x.t).toFixed(3), v: x.v })) }] });
