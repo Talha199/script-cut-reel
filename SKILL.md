@@ -283,6 +283,7 @@ Propose a default, explain the trade-off in one line, and ask:
 | "Remove the pauses" / "keep pauses" | on by default when `edit/silences.json` exists; `"silence": false` disables, `keepAfter`/`keepBefore` tune the breath, `protect` keeps them in a range. |
 | "Add our intro" | Say once what it likely costs (viewers leave in the first seconds); then `prep --intro`, `"introAfter": 0`, warn if > 2 s. `introMuted` + `music.intro` 0.8–0.9 if its sound is unwanted. |
 | "No zooms" / "more zooms" | `"zoom": false` / `zoom.minHold` 3 (never below 3 s); `zoom.punch` 1.15 for a stronger punch (≤ 1.2 — the picture softens beyond). |
+| "Zooms too abrupt" / "snappier zooms" | `zoom.smooth` 0.9–1.2 for a slower glide / 0.3 for a snap; 0 = hard punch-in. |
 | "Zoom in on this line" | `captionEmphasis` on its key word (punch-in at that word) or `zoom.push` across the sentence (one per Reel). |
 | "Show the verse/quote on screen" | Only if it passes the quote-card rules; otherwise say why (paraphrase, unknown source) and offer the caption emphasis instead. |
 | "Add sound effects" / "louder" / "quieter" / "no whoosh on zooms" | `"sfx": true`; `sfx.level` 0.5–1.5; `"sfx": {"punch": false}`. Different sound → see "Sound effects". |
@@ -306,11 +307,13 @@ profile-grid crop (y 240–1680):
   below). The spoken word changes colour only — scaling it eats the neighbouring space. Keywords
   (`captionEmphasis`) are bold + accent; the running highlight then becomes a softer tint.
 - **Title**: Cormorant Garamond 700 with a kicker and a growing rule, top-left at y=310, after the hook.
-- **Punch-ins**: hard cuts between 100 % and 112 %, on jump cuts (hiding the jump) and keywords, at
-  least 4 s apart, anchored at the eyes; none during recitation or quote cards; one optional slow push.
+- **Punch-ins**: eased 0.7 s glides between 100 % and 112 % (`zoom.smooth`; 0 = hard punch), on jump
+  cuts and keywords, at least 4 s apart, anchored at the eyes; none during recitation or quote cards;
+  one optional slow push. A one-frame jump in scale reads as a glitch, not as an edit.
 - **Quote cards**: Cormorant Garamond with the language's quotation marks in accent, the source in
   small caps under a short rule; full-frame dim or a lower panel; words brighten as spoken.
-- **Motion**: decelerating entrances (`power2.out`, 180–600 ms), no bounce or overshoot.
+- **Motion**: decelerating entrances (`power2.out`, 180–800 ms), no bounce or overshoot. Overlays that
+  change the whole frame (quote-card dim, title, hook exit) fade over 0.45–0.8 s — shorter reads as a cut.
 - **No** progress line, **no** fade to black, **no** default intro. Accent `#e6bf63` (gold) on a dark
   green-black scrim; `theme` changes it.
 

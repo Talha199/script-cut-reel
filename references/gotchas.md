@@ -89,6 +89,18 @@
 - `duplicate_audio_track`: adjacent clips of the same file on one track overlap after frame
   rounding → alternate `data-track-index` 0/1.
 - `overlapping_gsap_tweens` at clip boundaries: end each step one frame early.
+- **Black flash at a cut** (one frame: picture gone, captions still there). `data-start` and
+  `data-duration` rounded separately to 4 decimals left `start + duration` 0.0001 s *before* the next
+  clip's start (13.6666 vs 13.6667); a frame landing in that sliver shows neither video. Hit 3 of 20
+  cuts in an 80 s Reel, and every earlier render. `build.mjs` now floors each start to the frame and
+  overlaps every clip into the next by 2 ms (the later clip paints on top). Check a render with
+  `ffmpeg -i x.mp4 -vf blackdetect=d=0:pix_th=0.10 -an -f null -` (quote-card dims aren't that dark).
+- **Black last frame**: the renderer captures a frame *at* the composition's end, after the last clip
+  has ended — the last clip now runs one frame past `total`.
+- **Hard `tl.set` scale changes read as glitches**, worst when they coincide with an overlay arriving
+  (the hold back to 100 % fires exactly as a quote card fades in; a punch-in lands as the hook hands
+  over to the title). Punch-ins are eased glides now (`zoom.smooth`), and frame-wide overlays (card
+  dim, title, hook exit) fade over 0.45–0.8 s instead of 0.25–0.3 s.
 - Scaling the highlighted caption word (`scale: 1.06`) visually eats the space to its neighbour —
   highlight by colour only.
 - Removing a multi-line CSS rule with `sed '/selector/d'` leaves its continuation line behind →

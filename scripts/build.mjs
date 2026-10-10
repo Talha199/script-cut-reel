@@ -283,13 +283,14 @@ for (const cg of capGroups) for (const c of cards) if (c.t > cg.in && c.t < cg.o
 const cps = capGroups.map((c) => textOf(c.words).length / Math.max(0.1, c.out - c.in));
 
 // ── 3c. Framing: automatic punch-ins ──
-// Calm profile: the main video sits at 100 % or at `punch` (112 %) and switches only on a jump cut —
+// Calm profile: the main video sits at 100 % or at `punch` (112 %) and changes only on a jump cut —
 // where the change of scale also hides the jump — or on the first word of an emphasised keyword, and
-// never sooner than `minHold` seconds after the previous change. Protected ranges, quote cards and the
+// never sooner than `minHold` seconds after the previous change. Each change glides over `smooth`
+// seconds, eased (a one-frame jump in scale reads as a glitch); `smooth: 0` = hard punch. Protected ranges, quote cards and the
 // intro go back to 100 % and hold it. One optional slow push (100 → 107 %) carries the thesis line.
 // The scale is anchored at `origin` (the eyes), so the face stays where it is and the edges crop.
 const zoomOn = project.zoom !== false;
-const zoom = { punch: 1.12, minHold: 4, origin: "50% 38%", push: null, ...(typeof project.zoom === "object" ? project.zoom : {}) };
+const zoom = { punch: 1.12, minHold: 4, origin: "50% 38%", push: null, smooth: 0.7, ...(typeof project.zoom === "object" ? project.zoom : {}) };
 zoom.punch = Math.min(1.2, Math.max(1, zoom.punch));
 const rawSpans = (r) => mainClips.filter((c) => c.srcIn < r.out && c.srcOut > r.in)
   .map((c) => [mapIn(c, Math.max(c.srcIn, r.in)), mapIn(c, Math.min(c.srcOut, r.out))]);
@@ -416,9 +417,23 @@ const S = portrait
   : { titleTop: 70, titleSize: 76, refTop: 70, pad: 90, hookTop: 80, hookSize: 64, progressTop: 0 };
 
 // Adjacent clips alternate tracks 0/1: same-track neighbours trip lint's duplicate_audio_track on rounding.
-const videoTags = clips.map((c, ci) => c.kind === "main"
-  ? `    <video id="${c.id}" class="clip vid cam" src="${media.main.file}" data-start="${f(c.start)}" data-duration="${f(c.dur)}" data-media-start="${c.mediaStart.toFixed(3)}" data-fade-in="0.03" data-fade-out="0.03" data-track-index="${ci % 2}" playsinline data-has-audio="true"></video>`
-  : `    <video id="intro" class="clip vid" src="${media.intro.file}" data-start="${f(c.start)}" data-duration="${f(c.dur)}" data-track-index="${ci % 2}" playsinline ${media.intro.hasAudio && !project.introMuted ? 'data-has-audio="true"' : "muted"}></video>`).join("\n");
+// Clip edges: start and duration rounded separately could leave start+dur 0.0001 s short of the next
+// start — a frame landing in that sliver shows neither video (a black flash at the cut). So the start is
+// floored (a clip owns its first frame) and every clip overlaps the next by OVERLAP, well under a frame;
+// the later clip is later in the DOM, so it paints on top during the overlap. The renderer also
+// captures a frame AT the composition's end, so the last clip runs one frame past it.
+const OVERLAP = 0.002;
+const floor4 = (t) => Math.floor(q(t) * 1e4 + 1e-6) / 1e4;
+const clipTime = (c) => {
+  const start = floor4(c.start);
+  return { start: start.toFixed(4), dur: (floor4(c.start + c.dur) - start + (c === clips.at(-1) ? 1 / FPS : OVERLAP)).toFixed(4) };
+};
+const videoTags = clips.map((c, ci) => {
+  const ct = clipTime(c);
+  return c.kind === "main"
+    ? `    <video id="${c.id}" class="clip vid cam" src="${media.main.file}" data-start="${ct.start}" data-duration="${ct.dur}" data-media-start="${c.mediaStart.toFixed(3)}" data-fade-in="0.03" data-fade-out="0.03" data-track-index="${ci % 2}" playsinline data-has-audio="true"></video>`
+    : `    <video id="intro" class="clip vid" src="${media.intro.file}" data-start="${ct.start}" data-duration="${ct.dur}" data-track-index="${ci % 2}" playsinline ${media.intro.hasAudio && !project.introMuted ? 'data-has-audio="true"' : "muted"}></video>`;
+}).join("\n");
 
 let wi = 0;
 const capHtml = capGroups.map((cg) => {
@@ -569,13 +584,13 @@ ${mainClips.map((c, i) => {
 ${intro ? `        tl.to("#progress", { opacity: 0, duration: 0.2 }, ${f(intro.start)}).to("#progress", { opacity: 0.5, duration: 0.3 }, ${f(intro.start + intro.dur)});` : ""}` : ""}
 
 ${hook ? `        // hook headline${hookStatic ? " (on the first frame)" : ""}
-${hookStatic ? "" : `        tl.fromTo("#hook", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.25, ease: "power2.out" }, ${f(hook.t)});\n`}        tl.to("#hook", { opacity: 0, duration: 0.25, ease: "power1.in" }, ${f(hook.end - 0.25)});` : ""}
+${hookStatic ? "" : `        tl.fromTo("#hook", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.25, ease: "power2.out" }, ${f(hook.t)});\n`}        tl.to("#hook", { opacity: 0, y: -8, duration: 0.45, ease: "sine.inOut" }, ${f(hook.end - 0.45)});` : ""}
 
 ${title ? `        // title${titleStatic ? " (on the first frame)" : ""}
-${titleStatic ? "" : `        tl.fromTo("#title", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, ${f(title.t)});
-        tl.fromTo("#title .rule", { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: "power2.inOut" }, ${f(title.t + 0.2)});
-        tl.from("#title h1, #title h2", { opacity: 0, y: 16, duration: 0.5, stagger: 0.12, ease: "power2.out" }, ${f(title.t + 0.3)});
-`}        tl.to("#title", { opacity: 0, x: -20, duration: 0.4, ease: "power2.in" }, ${f(title.t + title.dur)});` : ""}
+${titleStatic ? "" : `        tl.fromTo("#title", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.8, ease: "power2.out" }, ${f(title.t)});
+        tl.fromTo("#title .rule", { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "power2.inOut" }, ${f(title.t + 0.2)});
+        tl.from("#title h1, #title h2", { opacity: 0, y: 14, duration: 0.6, stagger: 0.12, ease: "power2.out" }, ${f(title.t + 0.3)});
+`}        tl.to("#title", { opacity: 0, x: -16, duration: 0.6, ease: "sine.inOut" }, ${f(title.t + title.dur)});` : ""}
 
 ${refs.map((r) => `        tl.fromTo("#${r.id}", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.45, ease: "power2.out" }, ${f(r.t)});
         tl.fromTo("#${r.id} .star", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.4, ease: "power2.out" }, ${f(r.t + 0.05)});
@@ -597,15 +612,23 @@ ${capGroups.map((cg) => {
 }).join("\n")}
 
 ${framing.length ? `        // framing: punch-ins on cuts / keywords, holds at 100 %${push ? ", one slow push" : ""}
-${framing.map((x) => x.dur
-  ? `        tl.fromTo(".cam", { scale: ${x.from} }, { scale: ${x.s}, duration: ${f(x.dur - 1 / FPS)}, ease: "none", immediateRender: false }, ${f(x.t)});`
-  : `        tl.set(".cam", { scale: ${x.s} }, ${f(x.t)});`).join("\n")}` : ""}
+${framing.map((x, i) => {
+  if (x.dur) return `        tl.fromTo(".cam", { scale: ${x.from} }, { scale: ${x.s}, duration: ${f(x.dur - 1 / FPS)}, ease: "sine.inOut", immediateRender: false }, ${f(x.t)});`;
+  // Glide to the new scale, finishing before the next change. On a cut the move starts fast (it rides
+  // the cut); a keyword or a return to 100 % eases in and out.
+  const from = i ? framing[i - 1].s : 1;
+  const room = (framing[i + 1]?.t ?? total) - x.t - 1 / FPS;
+  const d = Math.min(Math.max(0, zoom.smooth), room);
+  return d < 2 / FPS
+    ? `        tl.set(".cam", { scale: ${x.s} }, ${f(x.t)});`
+    : `        tl.fromTo(".cam", { scale: ${from} }, { scale: ${x.s}, duration: ${f(d)}, ease: "${x.why === "cut" ? "power2.out" : "sine.inOut"}", immediateRender: false }, ${f(x.t)});`;
+}).join("\n")}` : ""}
 
 ${cards.map((c) => `        // ${c.id}: ${c.source}
-        tl.fromTo("#${c.id}", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, ${f(c.t)});
-        tl.fromTo("#${c.id} .box", { y: 16 }, { y: 0, duration: 0.45, ease: "power2.out" }, ${f(c.t)});
+        tl.fromTo("#${c.id}", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "sine.inOut" }, ${f(c.t)});
+        tl.fromTo("#${c.id} .box", { y: 16 }, { y: 0, duration: 0.7, ease: "power2.out" }, ${f(c.t)});
 ${c.words.map((w, j) => `        tl.to("#${c.id}-w${j}", { opacity: 1, duration: 0.12 }, ${f(Math.max(w.start, c.t + 0.05))});`).join("\n")}
-        tl.to("#${c.id}", { opacity: 0, duration: 0.3, ease: "power1.in" }, ${f(Math.max(c.t + 0.45, c.end - 0.3))});`).join("\n")}
+        tl.to("#${c.id}", { opacity: 0, duration: 0.5, ease: "sine.inOut" }, ${f(Math.max(c.t + 0.7, c.end - 0.5))});`).join("\n")}
 
 ${endFade > 0 ? `        // end: fade to black
         tl.to("#fade", { opacity: 1, duration: ${endFade}, ease: "power1.in" }, ${f(total - endFade)});` : ""}
