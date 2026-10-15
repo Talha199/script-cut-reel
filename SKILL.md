@@ -74,8 +74,10 @@ node <SKILL>/scripts/setup.mjs --project <dir>      # folders, fonts (Fontsource
 node <SKILL>/scripts/prep.mjs --project <dir> --main <raw> [--music <music>] [--intro hutbe] [--clean]
 ```
 
-`prep` writes `edit/main.wav` first (16 kHz, raw timing), then re-encodes everything to the canvas
-(portrait → 1080×1920, landscape → 1920×1080) with a 1-second GOP, BT.709 colour and −16 LUFS audio:
+`prep` writes `edit/main.wav` first (16 kHz, raw timing), then re-encodes everything to the export size
+and rate: 4K UHD at 60 fps (portrait → 2160×3840, landscape → 3840×2160; `EXPORT` in `scripts/lib.mjs`,
+`scale: 2` on a 1080×1920 / 1920×1080 layout canvas) with a 1-second GOP, BT.709 colour and −16 LUFS
+audio. Footage below 2160 px wide is upscaled (prep warns), and 30 fps footage gets duplicated frames at 60 fps:
 - **HDR** (iPhone HLG, PQ) is detected and tone-mapped to SDR automatically — untreated it looks grey.
 - **Aspect mismatches are cover-cropped**, never letterboxed (Instagram recommends bordered Reels
   less). A landscape sermon recording becomes a Reel with `--canvas portrait --focus-x <0–1>` (where
@@ -223,13 +225,21 @@ node <SKILL>/scripts/render.mjs --project <dir> --draft         # quick low-qual
 GPU encoding (NVENC / VideoToolbox / Quick Sync) when one works — never overwrites an earlier export
 (`<name>.mp4`, `<name>-2.mp4`, …), refuses a build that still has `--guides`, then runs `finalize`
 and `package`. Run it in the background. Time is dominated by HyperFrames capturing one browser
-screenshot per frame: ~0.3× realtime for clean frames on a mid-range desktop (a 60 s Reel ≈ 3–4 min),
-slower for grainy footage — much slower than an NLE like Resolve, by design. For review, prefer
-Studio (`preview`) or `--draft` over full renders.
+screenshot per frame. The export is 4K at 60 fps (`--resolution portrait-4k --fps 60`): twice the frames
+at four times the pixels of the old 1080p30 export. The earlier figures (~0.3× realtime for clean frames
+on a mid-range desktop, a 60 s Reel ≈ 3–4 min) were measured at 1080p30; 4K60 has not been benchmarked
+and will be several times slower. For review, prefer Studio (`preview`) or `--draft`, which renders a
+quick 1080p / 30 fps preview.
 
 `finalize` normalises the finished mix in two passes to −14 LUFS / −1 dBTP (`--lufs -16` for a
 quieter master; no platform publishes a target), copies the video stream (fixing incomplete colour
-tags; re-encoding only above 25 Mbit/s) and checks size, frame rate, codec, colour tags and loudness. `package` grabs the cover (frame 0 when the hook is on
+tags; re-encoding at CRF 18, ≤ 60 Mbit/s, only above 80 Mbit/s) and checks size, frame rate, codec, colour tags and loudness.
+**Instagram's published Reels limits are below this export:** third-party API docs list a maximum of
+1920 px wide × 3600 px high, 25 Mbit/s and 300 MB, 23–60 fps
+([Ayrshare](https://app.ayrshare.com/docs/media-guidelines/instagram)), so a 4K master gets downscaled or
+refused on upload. YouTube's recommended range for 4K 60 fps SDR is 53–68 Mbit/s
+([YouTube Help](https://support.google.com/youtube/answer/1722171)). For an Instagram-only upload, set
+`EXPORT = { fps: 30, scale: 1 }` in `scripts/lib.mjs` and `--max-mbps 25`. `package` grabs the cover (frame 0 when the hook is on
 it) plus a preview of the 3:4 grid crop, and writes `<name>.publish.md`. **Fill in its Caption and
 Alt text sections** from the transcript at its end: line 1 ≤ ~125 characters with the topic keyword
 first, 2–5 sentences, one send/save CTA, ≤ 5 specific hashtags (Instagram's limit). Then show the

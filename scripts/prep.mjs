@@ -17,7 +17,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { args, exists, ff, hasFilter, isHdr, p, probe, readJson, SKILL_DIR, tonemapFilter, writeJson } from "./lib.mjs";
+import { args, EXPORT, exists, ff, hasFilter, isHdr, p, probe, readJson, SKILL_DIR, tonemapFilter, writeJson } from "./lib.mjs";
 
 // Everything lands at the same loudness so the music bed level means the same thing on any source.
 // The finished mix gets its delivery loudness in finalize.mjs.
@@ -26,23 +26,26 @@ const LOUDNORM = "loudnorm=I=-16:TP=-1.5:LRA=11";
 // light de-essing and compression.
 const CLEAN = "highpass=f=80,afftdn=nf=-25:tn=1,deesser=i=0.3,acompressor=threshold=0.1:ratio=2.5:attack=10:release=200:makeup=1.5";
 
+// The canvas is the layout size the composition is built on (build.mjs reads it from media.json). The
+// encoded assets are EXPORT.scale× larger (2160×3840 at scale 2) to match the 4K render.
 const canvasFor = (info, mode = "auto") => {
   const portrait = mode === "portrait" || (mode === "auto" && info.height > info.width);
   return portrait ? { width: 1080, height: 1920 } : { width: 1920, height: 1080 };
 };
 
-function fit(info, { width: W, height: H }, mode, label) {
+function fit(info, canvas, mode, label) {
+  const W = canvas.width * EXPORT.scale, H = canvas.height * EXPORT.scale;
   const ratio = info.width / info.height / (W / H);
   if (mode === "pad") {
     if (Math.abs(ratio - 1) > 0.01) console.warn(`! ${label}: letterboxed ${info.width}x${info.height} into ${W}x${H} — Instagram shows bordered Reels less`);
-    return `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30`;
+    return `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${EXPORT.fps}`;
   }
   const lost = Math.round((1 - Math.min(ratio, 1 / ratio)) * 100);
   if (lost > 10) console.warn(`! ${label}: cover-crop cuts ${lost}% of the ${ratio > 1 ? "width" : "height"} — check the framing (--focus-x/--focus-y), or --${label === "main" ? "" : "intro-"}fit pad`);
   const up = Math.max(W / info.width, H / info.height);
   if (up > 1.1) console.warn(`! ${label}: upscaled ${up.toFixed(2)}× — expect a softer picture`);
   const fx = Number(args["focus-x"] ?? 0.5), fy = Number(args["focus-y"] ?? 0.5);
-  return `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}:(iw-ow)*${fx}:(ih-oh)*${fy},setsar=1,fps=30`;
+  return `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}:(iw-ow)*${fx}:(ih-oh)*${fy},setsar=1,fps=${EXPORT.fps}`;
 }
 
 const TONEMAP = typeof args.tonemap === "string" ? args.tonemap : "mobius";
@@ -57,7 +60,7 @@ function videoChain(info, canvas, fitMode, label, extra = []) {
     "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"].filter(Boolean).join(",") };
 }
 
-const VIDEO_OUT = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-g", "30", "-keyint_min", "30", "-pix_fmt", "yuv420p",
+const VIDEO_OUT = ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-g", String(EXPORT.fps), "-keyint_min", String(EXPORT.fps), "-pix_fmt", "yuv420p",
   "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"];
 const AUDIO_OUT = ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"];
 
@@ -76,7 +79,7 @@ if (typeof args.main === "string") {
   const fitMode = args.fit === "pad" ? "pad" : "crop";
   ff(["-i", args.main, "-map", "0:a:0", "-vn", ...(clean ? ["-af", CLEAN] : []), "-ac", "1", "-ar", "16000", p("edit/main.wav")]);
   const { hdr, vf } = videoChain(info, canvas, fitMode, "main", [`setpts=PTS/${speed}`, grade]);
-  media.main = { source: path.resolve(args.main), file: "assets/main.mp4", ...info, speed, grade, clean, fit: fitMode, tonemapped: hdr, canvas };
+  media.main = { source: path.resolve(args.main), file: "assets/main.mp4", ...info, speed, grade, clean, fit: fitMode, tonemapped: hdr, canvas, scale: EXPORT.scale };
   if (!args["audio-only"]) {
     ff(["-i", args.main, "-map", "0:v:0", "-map", "0:a:0", "-vf", vf, ...VIDEO_OUT,
       "-af", [clean && CLEAN, speed !== 1 && `atempo=${speed}`, LOUDNORM].filter(Boolean).join(","), ...AUDIO_OUT, "-movflags", "+faststart", p("assets/main.mp4")]);

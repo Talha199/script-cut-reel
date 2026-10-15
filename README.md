@@ -8,7 +8,7 @@ decide what stays — and hands you a publish package with it.
 raw recording ─┐    retakes & false starts cut · hook first, headline on frame 0 · pauses removed
 script ────────┤ ─► (recitation protected) · iPhone HDR tone-mapped · word-by-word captions inside
 music ─────────┘    Instagram's safe zones · music bed · −14 LUFS master
-                    ─►  1080×1920 MP4  +  cover  +  caption/hashtag/upload checklist
+                    ─►  4K 60 fps MP4 (2160×3840)  +  cover  +  caption/hashtag/upload checklist
 ```
 
 Built on [HyperFrames](https://www.npmjs.com/package/hyperframes) (HTML compositions rendered to MP4)

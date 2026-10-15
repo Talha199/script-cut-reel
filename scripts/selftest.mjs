@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { args, hyperframes } from "./lib.mjs";
+import { args, EXPORT, hyperframes } from "./lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "scr selftest ü-"));
@@ -33,7 +33,7 @@ const ffmpeg = (...a) => {
   if (r.status !== 0) throw new Error(`ffmpeg ${a.join(" ").slice(0, 200)}\n${r.stderr}`);
 };
 const probe = (file) => JSON.parse(spawnSync("ffprobe", ["-v", "error", "-show_entries",
-  "stream=codec_type,width,height,color_transfer,color_primaries,color_space", "-of", "json", file], { encoding: "utf8" }).stdout).streams;
+  "stream=codec_type,width,height,r_frame_rate,color_transfer,color_primaries,color_space", "-of", "json", file], { encoding: "utf8" }).stdout).streams;
 const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
 
 console.log(`self-test in ${dir}\n`);
@@ -54,9 +54,11 @@ step("prep.mjs (HDR, crop, --clean, bundled intro, music)", () => {
   const out = run("prep.mjs", "--main", P("raw clip.mp4"), "--intro", "hutbe", "--music", P("music.m4a"), "--clean");
   const m = json("edit/media.json");
   const [v] = probe(P("assets/main.mp4"));
-  expect(v.width === 1080 && v.height === 1920, `main is ${v.width}x${v.height}`);
+  const wantW = 1080 * EXPORT.scale, wantH = 1920 * EXPORT.scale;
+  expect(v.width === wantW && v.height === wantH, `main is ${v.width}x${v.height} (expected ${wantW}x${wantH})`);
+  expect(v.r_frame_rate === `${EXPORT.fps}/1`, `main is ${v.r_frame_rate} (expected ${EXPORT.fps}/1)`);
   expect(v.color_primaries === "bt709" && v.color_transfer === "bt709", `main tagged ${v.color_primaries}/${v.color_transfer}`);
-  expect(probe(P("assets/intro.mp4"))[0].height === 1920, "intro not on canvas");
+  expect(probe(P("assets/intro.mp4"))[0].height === wantH, "intro not on canvas");
   expect(m.intro.bundled === "hutbe" && m.intro.hasAudio === false, `bundled intro: ${JSON.stringify({ bundled: m.intro.bundled, hasAudio: m.intro.hasAudio })}`);
   return m.main.tonemapped ? "HDR tone-mapped" : (out.match(/! .*zscale.*/)?.[0] ?? "HDR NOT tone-mapped");
 });

@@ -1,15 +1,16 @@
 // Delivery pass on a rendered MP4: two-pass loudness normalisation of the finished mix (the sources were
 // only normalised one by one), faststart — plus a QA report that package.mjs reads. The video stream is
-// copied untouched unless it is over --max-mbps (default 25): grainy footage at the renderer's "high"
-// quality can reach hundreds of Mbit/s, while Instagram delivers ~3–4 Mbit/s whatever you upload — a
-// bloated file only makes the upload slow and fragile. Then it's re-encoded at CRF 18, capped at 16 Mbit/s.
-//   node <skill>/scripts/finalize.mjs out/reel.mp4 [--out out/reel.final.mp4] [--lufs -14] [--tp -1] [--max-mbps 25]
+// copied untouched unless it is over --max-mbps (default 80): grainy footage at the renderer's "high"
+// quality can reach hundreds of Mbit/s, and a bloated file only makes the upload slow and fragile. Then
+// it's re-encoded at CRF 18, capped at 60 Mbit/s — inside YouTube's recommended 53–68 Mbit/s for 4K 60 fps
+// SDR H.264 (support.google.com/youtube/answer/1722171). Instagram's own limit is far lower (see SKILL.md).
+//   node <skill>/scripts/finalize.mjs out/reel.mp4 [--out out/reel.final.mp4] [--lufs -14] [--tp -1] [--max-mbps 80]
 // No platform publishes a loudness target; −14 LUFS / −1 dBTP is the common short-form practice and
 // keeps a Reel as loud as the ones around it. --lufs -16 for a quieter, more conservative master.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { args, exists, ff, p, probe, readJson } from "./lib.mjs";
+import { args, EXPORT, exists, ff, p, probe, readJson } from "./lib.mjs";
 
 const input = args._[0] ? path.resolve(args._[0]) : null;
 if (!input || !fs.existsSync(input)) throw new Error("usage: finalize.mjs <rendered.mp4> [--out file] [--lufs -14] [--tp -1]");
@@ -18,11 +19,11 @@ if (output === input) throw new Error("--out must differ from the input");
 const I = Number(args.lufs ?? -14), TP = Number(args.tp ?? -1), LRA = 11;
 const src = probe(input);
 const mbps = (src.raw.size * 8) / src.duration / 1e6;
-const VIDEO = mbps > Number(args["max-mbps"] ?? 25)
-  ? ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-maxrate", "16M", "-bufsize", "32M", "-profile:v", "high", "-pix_fmt", "yuv420p",
+const VIDEO = mbps > Number(args["max-mbps"] ?? 80)
+  ? ["-c:v", "libx264", "-preset", "medium", "-crf", "18", "-maxrate", "60M", "-bufsize", "120M", "-profile:v", "high", "-pix_fmt", "yuv420p",
      "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
   : ["-c:v", "copy"];
-if (VIDEO[1] !== "copy") console.log(`render is ${mbps.toFixed(0)} Mbit/s → re-encoding video (CRF 18, ≤ 16 Mbit/s)`);
+if (VIDEO[1] !== "copy") console.log(`render is ${mbps.toFixed(0)} Mbit/s → re-encoding video (CRF 18, ≤ 60 Mbit/s)`);
 // HyperFrames' GPU (NVENC) path tags only the matrix and leaves primaries/transfer "unknown"; players
 // then guess. The pixels are BT.709 either way, so write the full tag set into the H.264 headers —
 // a bitstream edit, no re-encode.
@@ -67,7 +68,9 @@ if (timeline) Object.assign(qa, {
 });
 const issues = [];
 if (timeline?.guides) issues.push("rendered WITH --guides overlays — rebuild without --guides and render again");
-if (info.height > info.width && (info.width !== 1080 || info.height !== 1920)) issues.push(`portrait but ${info.width}x${info.height} (expected 1080x1920)`);
+const wantW = 1080 * EXPORT.scale, wantH = 1920 * EXPORT.scale;
+if (info.height > info.width && (info.width !== wantW || info.height !== wantH)) issues.push(`portrait but ${info.width}x${info.height} (expected ${wantW}x${wantH})`);
+if (Math.abs(info.fps - EXPORT.fps) > 0.01) issues.push(`${info.fps} fps (expected ${EXPORT.fps})`);
 if (info.duration > 180) issues.push("longer than 3:00 — not recommended by Instagram");
 if (![v.color_space, v.color_primaries, v.color_transfer].every((x) => x === "bt709")) issues.push(`colour not fully tagged BT.709 (${qa.color})`);
 if (v.codec_name !== "h264") issues.push(`video codec ${v.codec_name} — H.264 is the safe upload codec`);

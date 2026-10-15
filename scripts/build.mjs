@@ -11,13 +11,13 @@
 // it before rendering.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import { args, exists, p, readJson } from "./lib.mjs";
+import { args, EXPORT, exists, p, readJson } from "./lib.mjs";
 
 const media = readJson("edit/media.json");
 const project = readJson("edit/project.json");
 const words = readJson("edit/transcript.json");
 
-const FPS = 30;
+const FPS = EXPORT.fps;
 const q = (t) => Math.round(t * FPS) / FPS; // frame-quantized seconds
 const f = (t) => q(t).toFixed(4);
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

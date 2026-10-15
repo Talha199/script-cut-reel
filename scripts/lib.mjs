@@ -28,6 +28,17 @@ export const readJson = (rel) => JSON.parse(fs.readFileSync(p(rel), "utf8").trim
 export const writeJson = (rel, data) => fs.writeFileSync(p(rel), JSON.stringify(data, null, 2) + "\n", "utf8");
 export const exists = (rel) => fs.existsSync(p(rel));
 
+// Export settings, used by prep (asset size + frame rate), build (frame quantising), render and finalize.
+// The composition is laid out on a 1080×1920 (portrait) or 1920×1080 (landscape) canvas; HyperFrames
+// renders it at `scale`× device pixels, so scale 2 gives 2160×3840 / 3840×2160 (4K UHD) with the layout
+// untouched. Source clips are encoded at the same size so the extra pixels are real, not interpolated.
+export const EXPORT = { fps: 60, scale: 2 };
+// HyperFrames --resolution preset for a layout canvas at EXPORT.scale (1 = 1080p, 2 = 4K).
+export const resolutionPreset = (canvas, scale = EXPORT.scale) => {
+  if (scale !== 1 && scale !== 2) throw new Error(`EXPORT.scale must be 1 (1080p) or 2 (4K), got ${scale}`);
+  return `${canvas.height > canvas.width ? "portrait" : "landscape"}${scale === 2 ? "-4k" : ""}`;
+};
+
 // HyperFrames CLI, pinned to one minor version (tested: 0.8.143) — every doc command uses the same.
 export const HF = "hyperframes@0.8";
 // Runs `npx -y hyperframes@0.8 …`. Windows needs a shell to start npx.cmd, so arguments are quoted for
